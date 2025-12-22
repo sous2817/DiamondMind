@@ -1,107 +1,124 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
+import json
 from google import genai
 from PIL import Image
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
+# Local Imports
+from . import models, database, prompts
+
+# 1. Load Environment Variables
 load_dotenv()
+
 app = FastAPI()
 
-# --- CONFIGURATION ---
-# 1. Setup the AI Client
-# REPLACE THIS WITH YOUR ACTUAL KEY
-API_KEY = os.getenv("API_KEY")
+# 2. Setup Database Tables
+# This creates "diamond_mind.db" automatically if it doesn't exist
+models.Base.metadata.create_all(bind=database.engine)
+
+# 3. Setup CORS (Optional but good for Frontend)
+# Allows your React app to talk to this backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, change this to your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 4. Configure Google Gemini
+API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("No API Key found. Please check your .env file.")
 
 client = genai.Client(api_key=API_KEY)
 
-# 2. Setup Upload Folder
+# 5. Setup Upload Directory
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok", "brain": "Gemini 2.0 Active"}
+
+# --- ROUTES ---
+
+@app.get("/")
+def read_root():
+    return {"status": "Diamond Mind API is running ⚾"}
 
 @app.post("/analyze")
-async def analyze_image(file: UploadFile = File(...)):   
-    # flush=True forces the text to appear instantly in Windows PowerShell
+async def analyze_image(
+    file: UploadFile = File(...), 
+    db: Session = Depends(database.get_db)
+):
     print(f"👁️ Receiving image: {file.filename}...", flush=True)
     
     file_location = f"{UPLOAD_DIR}/{file.filename}"
     
     try:
-        # 1. Save the file
+        # A. Save the file locally
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 2. Open image
         print("🧠 Image saved. Loading AI...", flush=True)
-
-        # --- NEW PROMPT ---
-        coach_prompt = """
-                You are an elite hitting coach for 13U travel baseball players. Your job is to identify mechanical flaws based on a single snapshot.
-                
-                STEP 1: IDENTIFY THE PHASE
-                First, determine which phase of the swing is shown in the image:
-                - Stance (Waiting for pitch)
-                - Load/Stride (gathering energy)
-                - Connection/Contact (Bat meeting ball)
-                - Extension/Follow-through (After contact)
-                
-                STEP 2: ANALYZE BASED ON PHASE
-                Provide 3 specific bullet points of feedback RELEVANT TO THAT PHASE ONLY.
-                
-                If it is STANCE:
-                - Check: Are knees inside feet? Are hands high (near ear)? Is the bat angle 45 degrees?
-                
-                If it is LOAD/STRIDE:
-                - Check: Is the weight back? Have the hands separated back while the front foot moves forward?
-                
-                If it is CONTACT:
-                - Check: Is the front leg firm (blocking)? Is the back elbow tucked (in the slot)? Is the head down on the ball?
-                
-                STEP 3: THE VERDICT
-                Give a score out of 10 for this specific snapshot and one drill to improve.
-                
-                Analyze the image and provide output in strict JSON format.
-        
-                Your output must follow this exact schema:
-                {
-                    "phase": "String (Stance, Load, Contact, or Extension)",
-                    "score": Integer (1-10),
-                    "feedback": ["String", "String", "String"],
-                    "drill": "String (Name of one specific drill)",
-                    "drill_explanation": "String (One sentence explaining the drill)"
-                }
-
-                Do not include markdown formatting (like ```json). Just return the raw JSON string.
-                """
-
         img = Image.open(file_location)
 
-        # 3. Call the AI (Using the STABLE 1.5 Model)
-        print("🚀 Sending to Gemini 2.5...", flush=True)
+        # B. Get the Prompt from our new file
+        coach_prompt = prompts.get_coach_prompt()
+
+        # C. Call the AI
+        # Using gemini-3.0-flash-preview (or gemini-3-flash-preview if you prefer)
+        print("🚀 Sending to Gemini...", flush=True)
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-3-flash-preview", 
             contents=[img, coach_prompt]
         )
         
-        # 4. Extract text
-        ai_description = response.text
-        print(f"🗣️ Coach Said: {ai_description}", flush=True)
+        # D. Clean & Parse JSON
+        raw_text = response.text.strip()
+        # Remove markdown code blocks if the AI added them
+        if raw_text.startswith("```json"):
+            raw_text = raw_text.replace("```json", "").replace("```", "")
+        elif raw_text.startswith("```"):
+             raw_text = raw_text.replace("```", "")
+        
+        ai_data = json.loads(raw_text)
+        print(f"🗣️ Coach Score: {ai_data.get('score', 0)}/10", flush=True)
+
+        # E. Save to Database
+        new_swing = models.SwingAnalysis(
+            filename=file.filename,
+            phase=ai_data.get("phase", "Unknown"),
+            score=ai_data.get("score", 0),
+            feedback=ai_data.get("feedback", []),
+            drill=ai_data.get("drill", "None"),
+            drill_explanation=ai_data.get("drill_explanation", "")
+        )
+        
+        db.add(new_swing)
+        db.commit()
+        db.refresh(new_swing)
+        
+        print(f"💾 Saved to DB with ID: {new_swing.id}", flush=True)
 
         return {
-            "message": "Analysis Complete",
-            "description": ai_description
+            "message": "Analysis Complete & Saved",
+            "id": new_swing.id,
+            "data": ai_data 
         }
 
+    except json.JSONDecodeError:
+        print(f"❌ JSON Error. Raw text was: {raw_text}", flush=True)
+        return {"message": "Error parsing AI response", "raw_response": raw_text}
+        
     except Exception as e:
-        print(f"❌ CRITICAL ERROR: {type(e).__name__}", flush=True)
-        print(f"❌ DETAILS: {str(e)}", flush=True)
-        return {
-            "message": "Error analyzing image",
-            "description": f"Internal Error: {str(e)}"
-        }
+        print(f"❌ CRITICAL ERROR: {str(e)}", flush=True)
+        return {"message": "Internal Server Error", "description": str(e)}
+
+@app.get("/history")
+def get_history(limit: int = 10, db: Session = Depends(database.get_db)):
+    """Fetch the last 'limit' swings, newest first."""
+    swings = db.query(models.SwingAnalysis).order_by(models.SwingAnalysis.id.desc()).limit(limit).all()
+    return swings
