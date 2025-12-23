@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: diamond-mind-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JIRA_API_TOKEN
+        sync: false
+      - key: JIRA_EMAIL
+        sync: false
+      - key: JIRA_URL
+        sync: false
