@@ -1,18 +1,33 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null); // <--- NEW STATE
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [history, setHistory] = useState([]); // <--- NEW: Store history
 
   const fileInputRef = useRef(null);
+
+  // 1. Load History on Startup
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/history");
+      const data = await res.json();
+      setHistory(data);
+    } catch (err) {
+      console.error("Failed to load history:", err);
+    }
+  };
 
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // 1. Create a fake URL to show the image immediately
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
 
@@ -34,6 +49,9 @@ function App() {
       const data = await response.json();
       setResult(data.data);
 
+      // 2. Refresh History after a success
+      fetchHistory();
+
     } catch (err) {
       console.error(err);
       setError("Something went wrong. Is the backend running?");
@@ -42,7 +60,6 @@ function App() {
     }
   };
 
-  // Helper to reset everything
   const resetApp = () => {
     setResult(null);
     setPreviewUrl(null);
@@ -71,7 +88,6 @@ function App() {
 
         {analyzing ? (
           <div className="bg-slate-800 rounded-2xl aspect-[3/4] flex flex-col items-center justify-center relative overflow-hidden">
-            {/* Show the image dimmed while loading */}
             {previewUrl && (
               <img src={previewUrl} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm" />
             )}
@@ -84,13 +100,9 @@ function App() {
 
           /* RESULT CARD */
           <div className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 shadow-xl">
-
-            {/* IMAGE HEADER (New!) */}
             <div className="relative h-64 bg-black">
               <img src={previewUrl} className="w-full h-full object-cover opacity-90" />
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900 to-transparent h-20"></div>
-
-              {/* Score Badge floating on image */}
               <div className="absolute bottom-4 right-4 bg-slate-900/90 backdrop-blur px-4 py-2 rounded-xl border border-slate-700 flex flex-col items-center">
                 <span className={`text-3xl font-black ${result.score >= 7 ? 'text-green-400' : result.score >= 4 ? 'text-yellow-400' : 'text-red-400'}`}>
                   {result.score}
@@ -158,6 +170,37 @@ function App() {
                 </svg>
               </div>
               <p className="text-slate-300 font-medium text-lg">Tap to Analyze</p>
+            </div>
+          </div>
+        )}
+
+        {/* --- HISTORY SECTION --- */}
+        {history.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-4 px-1">Recent Sessions</h3>
+            <div className="space-y-3">
+              {history.map((item) => (
+                <div key={item.id} className="bg-slate-800 p-3 rounded-xl flex items-center justify-between border border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center text-xl">
+                      {/* Simple icon based on score */}
+                      {item.score >= 7 ? '🔥' : '⚠️'}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-slate-200">{item.phase}</p>
+                      {/* --- NEW CODE FOR DM-8 STARTS HERE --- */}
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        {new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {/* --- NEW CODE ENDS HERE --- */}
+                      <p className="text-xs text-slate-500">Drill: {item.drill}</p>
+                    </div>
+                  </div>
+                  <div className={`font-black text-lg ${item.score >= 7 ? 'text-green-400' : item.score >= 4 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {item.score}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
