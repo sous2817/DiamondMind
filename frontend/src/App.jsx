@@ -9,6 +9,11 @@ function App() {
 
   const fileInputRef = useRef(null);
 
+  // 1. Dynamic API URL
+  // If we are in production, use the environment variable. 
+  // If we are local, default to localhost.
+  const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
   // 1. Load History on Startup
   useEffect(() => {
     fetchHistory();
@@ -16,7 +21,7 @@ function App() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/history");
+      const res = await fetch(`${API_URL}/history`);
       const data = await res.json();
       setHistory(data);
     } catch (err) {
@@ -39,7 +44,7 @@ function App() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/analyze", {
+      const response = await fetch(`${API_URL}/analyze`, {
         method: "POST",
         body: formData,
       });
