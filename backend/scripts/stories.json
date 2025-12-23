@@ -1,0 +1,11 @@
+{
+    "summary": "Feature: Age-Adaptive Prompting",
+    "description": "Implement 'Persona Logic' to tailor AI feedback based on player level.\n\nTechnical Tasks:\n1. Create `backend/app/prompts.py` to store distinct system instructions:\n   - 10u: Fun, emojis, simple metaphors.\n   - 14u: Direct, mechanical, standard terminology.\n   - Varsity: Physics-based, critical, advanced.\n2. Update `POST /analyze` endpoint in `main.py` to accept a `level` form field.\n3. Frontend: Add a dropdown selector to pass this value.\n4. Default to '14u' if no level is provided.",
+    "issuetype": {
+        "name": "Story"
+    },
+    "labels": [
+        "AI",
+        "Logic"
+    ]
+}

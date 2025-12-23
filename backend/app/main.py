@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 # Local Imports
-from . import models, database, prompts
+from . import models, database
+from .prompts import get_system_instruction  # Import your new persona logic
 
 # 1. Load Environment Variables
 load_dotenv()
@@ -17,14 +18,12 @@ load_dotenv()
 app = FastAPI()
 
 # 2. Setup Database Tables
-# This creates "diamond_mind.db" automatically if it doesn't exist
 models.Base.metadata.create_all(bind=database.engine)
 
-# 3. Setup CORS (Optional but good for Frontend)
-# Allows your React app to talk to this backend
+# 3. Setup CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, change this to your frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,7 +40,6 @@ client = genai.Client(api_key=API_KEY)
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
 # --- ROUTES ---
 
 @app.get("/")
@@ -49,11 +47,12 @@ def read_root():
     return {"status": "Diamond Mind API is running ⚾"}
 
 @app.post("/analyze")
-async def analyze_image(
+async def analyze_swing(
     file: UploadFile = File(...), 
+    level: str = Form("14u"),
     db: Session = Depends(database.get_db)
 ):
-    print(f"👁️ Receiving image: {file.filename}...", flush=True)
+    print(f"👁️ Receiving image: {file.filename} for Level: {level}...", flush=True)
     
     file_location = f"{UPLOAD_DIR}/{file.filename}"
     
@@ -65,20 +64,21 @@ async def analyze_image(
         print("🧠 Image saved. Loading AI...", flush=True)
         img = Image.open(file_location)
 
-        # B. Get the Prompt from our new file
-        coach_prompt = prompts.get_coach_prompt()
+        # B. Get the correct Persona Prompt
+        # (This uses your new logic from prompts.py)
+        system_instruction = get_system_instruction(level)
 
         # C. Call the AI
-        # Using gemini-3.0-flash-preview (or gemini-3-flash-preview if you prefer)
         print("🚀 Sending to Gemini...", flush=True)
         response = client.models.generate_content(
-            model="gemini-3-flash-preview", 
-            contents=[img, coach_prompt]
+            model="gemini-3-flash-preview",  # Or "gemini-1.5-flash"
+            contents=[img, system_instruction]
         )
         
         # D. Clean & Parse JSON
         raw_text = response.text.strip()
-        # Remove markdown code blocks if the AI added them
+        
+        # Clean markdown if present
         if raw_text.startswith("```json"):
             raw_text = raw_text.replace("```json", "").replace("```", "")
         elif raw_text.startswith("```"):
