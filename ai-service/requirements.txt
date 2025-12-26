@@ -1,0 +1,14 @@
+# Computer Vision & AI
+mediapipe
+opencv-python
+numpy
+matplotlib
+
+# Optimized Math (MediaPipe dependencies)
+jax
+jaxlib
+
+# Service Communication (to talk to the Backend)
+requests
+fastapi
+uvicorn

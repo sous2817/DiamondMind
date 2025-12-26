@@ -1,20 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 
 function App() {
+  const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [history, setHistory] = useState([]); // <--- NEW: Store history
+  const [history, setHistory] = useState([]);
+  
+  // --- NEW: State for Player Level ---
+  const [level, setLevel] = useState("14u"); 
 
   const fileInputRef = useRef(null);
 
-  // 1. Dynamic API URL
-  // If we are in production, use the environment variable. 
-  // If we are local, default to localhost.
-  const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-
-  // 1. Load History on Startup
   useEffect(() => {
     fetchHistory();
   }, []);
@@ -42,6 +41,9 @@ function App() {
 
     const formData = new FormData();
     formData.append("file", file);
+    
+    // --- NEW: Send the selected level to the backend ---
+    formData.append("level", level); 
 
     try {
       const response = await fetch(`${API_URL}/analyze`, {
@@ -53,10 +55,8 @@ function App() {
 
       const data = await response.json();
       setResult(data.data);
-
-      // 2. Refresh History after a success
       fetchHistory();
-
+      
     } catch (err) {
       console.error(err);
       setError("Something went wrong. Is the backend running?");
@@ -73,18 +73,26 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-4 font-sans">
-
-      <header className="w-full max-w-md flex justify-between items-center mb-8 pt-4">
+      
+      <header className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
         <h1 className="text-2xl font-bold tracking-tighter text-blue-400">
           DIAMOND<span className="text-white">MIND</span>
         </h1>
-        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-xs font-bold">
-          S
-        </div>
+        
+        {/* --- NEW: Level Selector (Top Right) --- */}
+        <select 
+          value={level} 
+          onChange={(e) => setLevel(e.target.value)}
+          className="bg-slate-800 text-white text-xs font-bold py-1 px-3 rounded-full border border-slate-600 focus:outline-none focus:border-blue-500"
+        >
+          <option value="10u">🦁 10U (Fun)</option>
+          <option value="14u">⚾ 14U (Std)</option>
+          <option value="varsity">🎓 Varsity (Pro)</option>
+        </select>
       </header>
 
       <main className="w-full max-w-md flex-grow flex flex-col gap-6">
-
+        
         {error && (
           <div className="bg-red-500/10 border border-red-500 text-red-200 p-4 rounded-xl text-sm text-center">
             {error}
@@ -99,10 +107,14 @@ function App() {
             <div className="relative z-10 flex flex-col items-center">
               <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
               <p className="text-blue-400 font-bold">Scouting the Player...</p>
+              {/* Show which coach is analyzing */}
+              <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">
+                {level === '10u' ? 'Little League Coach' : level === 'varsity' ? 'Pro Scout' : 'Travel Coach'}
+              </p>
             </div>
           </div>
         ) : result ? (
-
+          
           /* RESULT CARD */
           <div className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 shadow-xl">
             <div className="relative h-64 bg-black">
@@ -144,7 +156,7 @@ function App() {
                 </p>
               </div>
 
-              <button
+              <button 
                 onClick={resetApp}
                 className="w-full mt-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium transition-colors"
               >
@@ -154,17 +166,17 @@ function App() {
           </div>
 
         ) : (
-
+          
           /* UPLOAD CARD */
-          <div
-            onClick={() => fileInputRef.current.click()}
+          <div 
+            onClick={() => fileInputRef.current.click()} 
             className="bg-slate-800 rounded-2xl aspect-[3/4] border-2 border-dashed border-slate-600 flex flex-col items-center justify-center relative overflow-hidden group hover:border-blue-500 transition-colors cursor-pointer"
           >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileSelect}
-              className="hidden"
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileSelect} 
+              className="hidden" 
               accept="image/*"
             />
             <div className="text-center p-6 pointer-events-none">
@@ -175,11 +187,17 @@ function App() {
                 </svg>
               </div>
               <p className="text-slate-300 font-medium text-lg">Tap to Analyze</p>
+              
+              {/* --- NEW: Dynamic Hint --- */}
+               <p className="text-slate-500 text-sm mt-2">
+                 {level === '10u' ? "Show me your swing, kiddo! 🦁" : level === 'varsity' ? "Upload mechanics for review." : "Upload Photo of Swing"}
+               </p>
+
             </div>
           </div>
         )}
 
-        {/* --- HISTORY SECTION --- */}
+        {/* HISTORY LIST (Unchanged) */}
         {history.length > 0 && (
           <div className="mt-8">
             <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-4 px-1">Recent Sessions</h3>
@@ -188,17 +206,13 @@ function App() {
                 <div key={item.id} className="bg-slate-800 p-3 rounded-xl flex items-center justify-between border border-slate-700">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center text-xl">
-                      {/* Simple icon based on score */}
                       {item.score >= 7 ? '🔥' : '⚠️'}
                     </div>
                     <div>
                       <p className="font-bold text-sm text-slate-200">{item.phase}</p>
-                      {/* --- NEW CODE FOR DM-8 STARTS HERE --- */}
                       <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        {new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </p>
-                      {/* --- NEW CODE ENDS HERE --- */}
-                      <p className="text-xs text-slate-500">Drill: {item.drill}</p>
                     </div>
                   </div>
                   <div className={`font-black text-lg ${item.score >= 7 ? 'text-green-400' : item.score >= 4 ? 'text-yellow-400' : 'text-red-400'}`}>
