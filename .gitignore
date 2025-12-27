@@ -45,7 +45,6 @@ frontend/.eslintcache
 **/ios/Pods/
 **/ios/DerivedData/
 *.xcworkspace
-!*.xcworkspace
 
 # --- TESTING & COVERAGE ---
 **/coverage/
