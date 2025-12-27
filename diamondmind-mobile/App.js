@@ -26,9 +26,10 @@ export default function App() {
   });
 
   useEffect(() => {
-    const subscription = player.addListener('timeUpdate', (payload) => {
-    // Backup check: If we don't have naturalSize yet, try to grab it from the player
+  const subscription = player.addListener('timeUpdate', (payload) => {
+    // FALLBACK: If naturalSize is missing, try to grab it from the player object
     if (!naturalSize && player.src?.width) {
+      console.log("Fallback: Captured size from player.src", player.src.width);
       setNaturalSize({ width: player.src.width, height: player.src.height });
     }
 
@@ -42,7 +43,7 @@ export default function App() {
   });
 
   return () => subscription.remove();
-  }, [player, result, naturalSize]);
+}, [player, result, naturalSize]);
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -154,10 +155,12 @@ export default function App() {
                 player={player}
                 style={styles.videoPlayer}
                 contentMode="contain"
-                allowsFullscreen
+                fullscreenOptions={{
+                  canEnterFullscreen: true,
+                }}
                 onLoad={(event) => {
-                  // event.source contains the width/height of the video file
                   if (event.source?.width) {
+                    console.log("Success: Captured size from onLoad", event.source.width);
                     setNaturalSize({ 
                       width: event.source.width, 
                       height: event.source.height 
@@ -173,6 +176,7 @@ export default function App() {
                 naturalSize={naturalSize}
               />
             </View>
+
             <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
               <Text style={styles.resetButtonText}>Analyze New Swing</Text>
             </TouchableOpacity>
