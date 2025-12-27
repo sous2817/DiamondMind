@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
 
 # 2. Install Python Dependencies
 COPY requirements.txt .
+COPY pose_landmarker_heavy.task .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 3. Copy the Application Code
