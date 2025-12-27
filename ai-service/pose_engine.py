@@ -15,7 +15,7 @@ def analyze_video_pose(video_path: str):
     VisionRunningMode = mp.tasks.vision.RunningMode
 
     # Define the model path
-    model_path = 'pose_landmarker_heavy.task'
+    model_path = 'pose_landmarker.task'
 
     # Create the landmarker instance
     options = PoseLandmarkerOptions(
