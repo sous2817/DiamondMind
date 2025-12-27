@@ -1,24 +1,24 @@
 {
-  "summary": "Optimization: SVG Coordinate Calibration",
+  "summary": "Optimization: Migrate Video Engine to expo-video",
   "issuetype": { "name": "Story" },
-  "priority": { "name": "Highest" },
-  "labels": ["Frontend", "UI-Bug", "Visualization"],
+  "priority": { "name": "Medium" },
+  "labels": ["Mobile", "Tech-Debt"],
   "details": {
-    "user_story": "As a User, I want the skeletal overlay to align perfectly with my body in the video so that the analysis is visually accurate.",
-    "context": "Currently, the SVG overlay uses the container dimensions (videoWrapper), which includes letterboxing (black bars). We need to calculate the 'Active Video Area' and scale landmarks specifically to that area[cite: 57].",
+    "user_story": "As a Developer, I want to use the latest expo-video library so that the app remains compatible with future Expo SDK versions and benefits from native performance improvements.",
+    "context": "expo-av is deprecated for video as of SDK 52/53. Transitioning to the new VideoPlayer API will improve sync reliability and future-proof the codebase.",
     "acceptance_criteria": [
-      "Dynamic Scaling: Update SkeletonOverlay to accept 'naturalSize' from the video player.",
-      "Letterbox Handling: Calculate the X/Y offset for centered videos to prevent the 'floating' effect seen in the screenshot.",
-      "Resize Stability: Ensure the skeleton stays aligned when switching between portrait and landscape videos."
+      "Replacement: Remove `expo-av` and implement `expo-video` (VideoView/useVideoPlayer).",
+      "Sync Parity: Ensure the `timeUpdate` listener correctly triggers the SkeletonOverlay landmark updates.",
+      "Stability: Verify that video looping and native controls function identically to the previous version."
     ],
     "technical_details": [
-      "Use `onReadyForDisplay` from `expo-av` to get `naturalSize`.",
-      "Implement a mapping function: `targetX = (landmark.x * videoActualWidth) + horizontalOffset`.",
-      "Ensure `SkeletonOverlay` styles use `pointerEvents='none'` to avoid blocking video controls."
+      "Use `useVideoPlayer` hook for state-driven playback control.",
+      "Update `handlePlaybackStatusUpdate` logic to the new `timeUpdate` event listener format.",
+      "Map `player.src` metadata to the coordinate scaling logic."
     ],
     "edge_cases": [
-      "Vertical Video: Ensure 9:16 'shorts' style videos don't stretch the skeleton horizontally.",
-      "Cropped Videos: Handle videos where the aspect ratio is manually altered by the user before upload."
+      "Fast Scrubbing: Ensure the skeleton doesn't lag when the user drags the video progress bar.",
+      "Backgrounding: Handle app suspension to ensure the video player doesn't leak memory."
     ]
   }
 }

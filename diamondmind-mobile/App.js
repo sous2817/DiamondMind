@@ -1,11 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { CheckCircle2, AlertCircle, UploadCloud, XCircle } from 'lucide-react-native';
 import UploadService from './src/services/UploadService.js';
-import { Video } from 'expo-av';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
@@ -17,8 +17,28 @@ export default function App() {
   const [currentFrameData, setCurrentFrameData] = useState(null);
   const [videoUri, setVideoUri] = useState(null); 
   const [videoLayout, setVideoLayout] = useState({ width: 0, height: 0 });
-  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState(null);
+
+  // Initialize the new expo-video player
+  const player = useVideoPlayer(videoUri, (player) => {
+    player.loop = true;
+    player.play();
+  });
+
+  // Sync AI landmarks to video time
+  useEffect(() => {
+    const subscription = player.addEventHandler('timeUpdate', (payload) => {
+      if (result?.frames) {
+        const currentTimeMs = payload.currentTime * 1000; // seconds to ms
+        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+        if (frame) {
+          setCurrentFrameData(frame.landmarks);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [player, result]);
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -31,7 +51,7 @@ export default function App() {
 
     const asset = pickerResult.assets[0];
     setSelectedFile(asset.fileName || "swing_video.mp4");
-    setVideoUri(asset.uri); // CRITICAL: This was missing!
+    setVideoUri(asset.uri); 
     handleUpload(asset.uri);
   };
 
@@ -82,18 +102,8 @@ export default function App() {
     setCurrentFrameData(null);
     setVideoUri(null);
     setVideoLayout({ width: 0, height: 0 });
+    setNaturalSize(null);
     setLoading(false);
-  };
-
-  const handlePlaybackStatusUpdate = (status) => {
-    if (status.positionMillis && result?.frames) {
-      const currentTimeMs = status.positionMillis;
-      // Matching video time to AI landmark data
-      const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
-      if (frame) {
-        setCurrentFrameData(frame.landmarks);
-      }
-    }
   };
 
   return (
@@ -135,40 +145,31 @@ export default function App() {
               <Text style={styles.successTitle}>Swing Analysis Ready</Text>
             </View>
 
-            <View 
-              style={styles.videoWrapper}
-              onLayout={(event) => {
-                const { width, height } = event.nativeEvent.layout;
-                setVideoLayout({ width, height });
-              }}
-            >
-              
-              <Video
-                source={{ uri: videoUri }}
+            <View style={styles.videoWrapper} onLayout={(e) => setVideoLayout(e.nativeEvent.layout)}>
+              <VideoView
+                player={player}
                 style={styles.videoPlayer}
-                resizeMode="contain"
-                useNativeControls
-                isLooping
-                onReadyForDisplay={(event) => {
-                  // This captures the ACTUAL pixels of the video file
-                  setNaturalSize(event.naturalSize);
+                contentMode="contain"
+                allowsFullscreen
+                onIsVideoOutputReady={() => {
+                   if (player.src?.width) {
+                     setNaturalSize({ width: player.src.width, height: player.src.height });
+                   }
                 }}
-                onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
               />
               <SkeletonOverlay 
                 landmarks={currentFrameData} 
                 width={videoLayout.width} 
                 height={videoLayout.height} 
-                naturalSize={naturalSize} 
+                naturalSize={naturalSize}
               />
             </View>
-
             <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
               <Text style={styles.resetButtonText}>Analyze New Swing</Text>
             </TouchableOpacity>
           </View>
         )}
-
+        
         {error && (
           <View style={styles.errorCard}>
             <AlertCircle size={24} color="#FF3B30" />

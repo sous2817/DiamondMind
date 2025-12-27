@@ -13,7 +13,8 @@
           "photosPermission": "DiamondMind needs access to your gallery to analyze your swings.",
           "videosPermission": "DiamondMind needs access to your gallery to analyze your swings."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "ios": {
       "supportsTablet": true,
