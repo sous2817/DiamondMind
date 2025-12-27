@@ -6,7 +6,6 @@ import { CheckCircle2, AlertCircle, UploadCloud, XCircle } from 'lucide-react-na
 import UploadService from './src/services/UploadService.js';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useEventListener } from 'expo-video';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
@@ -16,28 +15,34 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const abortControllerRef = useRef(null);
   const [currentFrameData, setCurrentFrameData] = useState(null);
-  const [videoUri, setVideoUri] = useState(null); 
+  const [videoUri, setVideoUri] = useState(null);
   const [videoLayout, setVideoLayout] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState(null);
 
-  // Initialize the new expo-video player
+  // Initialize the native video player controller
   const player = useVideoPlayer(videoUri, (player) => {
     player.loop = true;
     player.play();
   });
 
-  // Sync AI landmarks to video time
-  useEventListener(player, 'timeUpdate', (payload) => {
-    if (result?.frames) {
-      // payload.currentTime is in seconds, landmarks use milliseconds
-      const currentTimeMs = payload.currentTime * 1000; 
-
-      const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
-      if (frame) {
-        setCurrentFrameData(frame.landmarks);
+  // Sync AI landmarks to video time using the robust .addListener pattern
+  useEffect(() => {
+    const subscription = player.addListener('timeUpdate', (payload) => {
+      if (result?.frames) {
+        // AI frames are indexed by milliseconds
+        const currentTimeMs = payload.currentTime * 1000;
+        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+        if (frame) {
+          setCurrentFrameData(frame.landmarks);
+        }
       }
-    }
-  });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [player, result]);
+
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
@@ -49,7 +54,7 @@ export default function App() {
 
     const asset = pickerResult.assets[0];
     setSelectedFile(asset.fileName || "swing_video.mp4");
-    setVideoUri(asset.uri); 
+    setVideoUri(asset.uri);
     handleUpload(asset.uri);
   };
 
@@ -150,15 +155,15 @@ export default function App() {
                 contentMode="contain"
                 allowsFullscreen
                 onIsVideoOutputReady={() => {
-                   if (player.src?.width) {
-                     setNaturalSize({ width: player.src.width, height: player.src.height });
-                   }
+                  if (player.src?.width) {
+                    setNaturalSize({ width: player.src.width, height: player.src.height });
+                  }
                 }}
               />
-              <SkeletonOverlay 
-                landmarks={currentFrameData} 
-                width={videoLayout.width} 
-                height={videoLayout.height} 
+              <SkeletonOverlay
+                landmarks={currentFrameData}
+                width={videoLayout.width}
+                height={videoLayout.height}
                 naturalSize={naturalSize}
               />
             </View>
@@ -167,7 +172,7 @@ export default function App() {
             </TouchableOpacity>
           </View>
         )}
-        
+
         {error && (
           <View style={styles.errorCard}>
             <AlertCircle size={24} color="#FF3B30" />
@@ -209,7 +214,7 @@ const styles = StyleSheet.create({
   retryText: { color: '#007AFF', fontWeight: '700' },
   videoWrapper: {
     width: '100%',
-    aspectRatio: 16 / 9, 
+    aspectRatio: 16 / 9,
     backgroundColor: '#000',
     borderRadius: 15,
     overflow: 'hidden',
