@@ -1,11 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, LogBox } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { CheckCircle2, AlertCircle, UploadCloud, XCircle } from 'lucide-react-native';
+import { CheckCircle2, AlertCircle, UploadCloud, XCircle, Maximize2, Minimize2 } from 'lucide-react-native';
 import UploadService from './src/services/UploadService.js';
+import { Video } from 'expo-av';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
-import { useVideoPlayer, VideoView } from 'expo-video';
+
+// Silence the deprecation warning while we use the stable version
+LogBox.ignoreLogs(['[expo-av]: Expo AV has been deprecated']);
 
 export default function App() {
   const [loading, setLoading] = useState(false);
@@ -18,38 +21,7 @@ export default function App() {
   const [videoUri, setVideoUri] = useState(null);
   const [videoLayout, setVideoLayout] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState(null);
-
-  const player = useVideoPlayer(videoUri, (player) => {
-    player.loop = true;
-    player.play();
-  });
-
-  useEffect(() => {
-    // If we don't have a URI or results yet, don't attach listener
-    if (!videoUri || !result) return;
-
-    console.log("Attaching listener to player for URI:", videoUri);
-
-    const subscription = player.addListener('timeUpdate', (payload) => {
-      // Force capture naturalSize if it's missing
-      if (!naturalSize && player.src?.width) {
-        setNaturalSize({ width: player.src.width, height: player.src.height });
-      }
-
-      if (result?.frames) {
-        const currentTimeMs = payload.currentTime * 1000;
-        // DEBUG LOG: This will show in your terminal if the listener is alive
-        console.log(`Clock: ${currentTimeMs.toFixed(0)}ms`);
-
-        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
-        if (frame) {
-          setCurrentFrameData(frame.landmarks);
-        }
-      }
-    });
-
-    return () => subscription.remove();
-  }, [player, videoUri, result]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -71,7 +43,6 @@ export default function App() {
     setError(null);
     setProgress(0);
     abortControllerRef.current = new AbortController();
-
     const jobId = Math.random().toString(36).substring(7);
     const ws = new WebSocket(`wss://diamondmind-vg35.onrender.com/ws/progress/${jobId}`);
 
@@ -85,19 +56,23 @@ export default function App() {
     };
 
     try {
-      const data = await UploadService.uploadSwingVideo(
-        uri,
-        jobId,
-        abortControllerRef.current.signal
-      );
+      const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
       if (data) setResult(data);
     } catch (err) {
-      if (err.message !== 'canceled') {
-        setError("Analysis failed or timed out.");
-      }
+      if (err.message !== 'canceled') setError("Analysis failed or timed out.");
     } finally {
       setLoading(false);
       ws.close();
+    }
+  };
+
+  const handlePlaybackStatusUpdate = (status) => {
+    if (status.positionMillis && result?.frames) {
+      const currentTimeMs = status.positionMillis;
+      const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+      if (frame) {
+        setCurrentFrameData(frame.landmarks);
+      }
     }
   };
 
@@ -109,12 +84,7 @@ export default function App() {
     setVideoUri(null);
     setVideoLayout({ width: 0, height: 0 });
     setNaturalSize(null);
-    setLoading(false);
-  };
-
-  const cancelAnalysis = () => {
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    handleReset();
+    setIsFullscreen(false);
   };
 
   return (
@@ -129,7 +99,6 @@ export default function App() {
           <TouchableOpacity style={styles.uploadCard} onPress={pickVideo}>
             <UploadCloud size={48} color="#007AFF" />
             <Text style={styles.uploadText}>Select Swing from Gallery</Text>
-            <Text style={styles.uploadSubtext}>Max 50MB • MP4 or MOV</Text>
           </TouchableOpacity>
         )}
 
@@ -142,7 +111,10 @@ export default function App() {
             </View>
             <Text style={styles.progressText}>{progress}% Complete</Text>
             <Text style={styles.waitingText}>Our AI is mapping 33 body points...</Text>
-            <TouchableOpacity style={styles.cancelButton} onPress={cancelAnalysis}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => abortControllerRef.current?.abort()}
+            >
               <XCircle size={20} color="#FF3B30" />
               <Text style={styles.cancelButtonText}>Cancel Analysis</Text>
             </TouchableOpacity>
@@ -150,39 +122,49 @@ export default function App() {
         )}
 
         {result && (
-          <View style={styles.successCard}>
-            <View style={styles.row}>
-              <CheckCircle2 size={24} color="#34C759" />
-              <Text style={styles.successTitle}>Swing Analysis Ready</Text>
-            </View>
-
+          <View style={isFullscreen ? styles.fullscreenContainer : styles.successCard}>
+            {isFullscreen && <SafeAreaView style={{ flex: 0, backgroundColor: '#000' }} />}
             <View
-              style={styles.videoWrapper}
+              style={isFullscreen ? styles.fullscreenVideoWrapper : styles.videoWrapper}
               onLayout={(e) => setVideoLayout(e.nativeEvent.layout)}
             >
-              <VideoView
-                player={player}
+              <Video
+                source={{ uri: videoUri }}
                 style={styles.videoPlayer}
-                contentMode="contain"
-                fullscreenOptions={{ canEnterFullscreen: true }}
-                onLoad={(event) => {
-                  if (event.source?.width) {
-                    setNaturalSize({ width: event.source.width, height: event.source.height });
-                  }
-                }}
+                resizeMode="contain"
+                useNativeControls={false}
+                isLooping
+                shouldPlay
+                progressUpdateIntervalMillis={16}
+                onReadyForDisplay={(event) => setNaturalSize(event.naturalSize)}
+                onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
               />
+
               <SkeletonOverlay
                 landmarks={currentFrameData}
                 width={videoLayout.width}
                 height={videoLayout.height}
-                // Fallback: If naturalSize is null, use the layout size so it at least draws SOMETHING
                 naturalSize={naturalSize || { width: videoLayout.width, height: videoLayout.height }}
               />
+
+              <TouchableOpacity
+                style={[styles.modernExpandButton, { bottom: isFullscreen ? 60 : 24 }]}
+                onPress={() => setIsFullscreen(!isFullscreen)}
+                activeOpacity={0.7}
+              >
+                {isFullscreen ? (
+                  <Minimize2 size={22} color="#FFF" />
+                ) : (
+                  <Maximize2 size={22} color="#FFF" />
+                )}
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
-              <Text style={styles.resetButtonText}>Analyze New Swing</Text>
-            </TouchableOpacity>
+            {!isFullscreen && (
+              <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
+                <Text style={styles.resetButtonText}>Analyze New Swing</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -203,36 +185,45 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F2F2F7', padding: 20 },
   header: { alignItems: 'center', marginTop: 20, marginBottom: 40 },
-  title: { fontSize: 32, fontWeight: '900', color: '#1C1C1E', letterSpacing: -1 },
-  subtitle: { fontSize: 16, color: '#8E8E93', fontWeight: '500' },
+  title: { fontSize: 32, fontWeight: '900', color: '#1C1C1E' },
+  subtitle: { fontSize: 16, color: '#8E8E93' },
   uploadCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 40, alignItems: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: '#007AFF' },
-  uploadText: { marginTop: 15, fontSize: 18, fontWeight: '600', color: '#1C1C1E' },
-  uploadSubtext: { marginTop: 5, fontSize: 14, color: '#8E8E93' },
-  statusCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 30, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10 },
-  loadingText: { marginTop: 20, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 15 },
-  progressContainer: { width: '100%', height: 10, backgroundColor: '#E5E5EA', borderRadius: 5, overflow: 'hidden', marginBottom: 10 },
+  uploadText: { marginTop: 15, fontSize: 18, fontWeight: '600' },
+  statusCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 30, alignItems: 'center' },
+  loadingText: { marginTop: 20, fontSize: 16, fontWeight: '700' },
+  progressContainer: { width: '100%', height: 10, backgroundColor: '#E5E5EA', borderRadius: 5, overflow: 'hidden', marginVertical: 15 },
   progressBar: { height: '100%', backgroundColor: '#007AFF' },
-  progressText: { fontSize: 14, fontWeight: '600', color: '#007AFF', marginBottom: 10 },
-  waitingText: { marginTop: 8, fontSize: 14, color: '#8E8E93', marginBottom: 10 },
+  progressText: { fontSize: 14, fontWeight: '600', color: '#007AFF', marginBottom: 5 },
+  waitingText: { fontSize: 14, color: '#8E8E93', marginBottom: 10 },
   cancelButton: { flexDirection: 'row', alignItems: 'center', marginTop: 15, padding: 10, backgroundColor: '#FFF5F5', borderRadius: 8, borderWidth: 1, borderColor: '#FFE5E5' },
   cancelButtonText: { color: '#FF3B30', fontWeight: '600', marginLeft: 8 },
-  successCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, width: '100%' },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  successTitle: { fontSize: 18, fontWeight: '700', color: '#34C759', marginLeft: 8 },
+  successCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
+  videoWrapper: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000', borderRadius: 15, overflow: 'hidden', position: 'relative' },
+  videoPlayer: { flex: 1 },
   resetButton: { marginTop: 20, backgroundColor: '#007AFF', padding: 15, borderRadius: 12, alignItems: 'center' },
   resetButtonText: { color: '#FFF', fontWeight: '700' },
+  fullscreenContainer: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', zIndex: 1000 },
+  fullscreenVideoWrapper: { flex: 1, width: '100%', height: '100%', justifyContent: 'center' },
+  modernExpandButton: {
+    position: 'absolute',
+    right: 20,
+    backgroundColor: 'rgba(28, 28, 30, 0.8)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+    zIndex: 1001,
+  },
   errorCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, alignItems: 'center', borderLeftWidth: 5, borderLeftColor: '#FF3B30' },
   errorText: { color: '#1C1C1E', fontWeight: '600', marginVertical: 10 },
   retryButton: { backgroundColor: '#F2F2F7', padding: 10, borderRadius: 8 },
   retryText: { color: '#007AFF', fontWeight: '700' },
-  videoWrapper: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000',
-    borderRadius: 15,
-    overflow: 'hidden',
-    position: 'relative',
-    marginTop: 10,
-  },
-  videoPlayer: { flex: 1 },
 });

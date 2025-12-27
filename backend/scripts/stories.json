@@ -1,24 +1,19 @@
+[
 {
-  "summary": "Optimization: Migrate Video Engine to expo-video",
+  "key": "DM-34",
+  "summary": "Optimization: Migrate Video Engine to expo-video (fix_7)",
   "issuetype": { "name": "Story" },
-  "priority": { "name": "Medium" },
-  "labels": ["Mobile", "Tech-Debt"],
+  "priority": { "name": "Highest" },
+  "labels": ["Technical-Debt", "Refactor"],
   "details": {
-    "user_story": "As a Developer, I want to use the latest expo-video library so that the app remains compatible with future Expo SDK versions and benefits from native performance improvements.",
-    "context": "expo-av is deprecated for video as of SDK 52/53. Transitioning to the new VideoPlayer API will improve sync reliability and future-proof the codebase.",
+    "user_story": "As a Developer, I want to use the modern expo-video engine so that I can avoid deprecation warnings while maintaining sub-millisecond skeleton sync.",
+    "context": "Initial migration failed due to inconsistent timeUpdate events. Implementing explicit timeUpdateEventInterval to match 60fps tracking requirements.",
     "acceptance_criteria": [
-      "Replacement: Remove `expo-av` and implement `expo-video` (VideoView/useVideoPlayer).",
-      "Sync Parity: Ensure the `timeUpdate` listener correctly triggers the SkeletonOverlay landmark updates.",
-      "Stability: Verify that video looping and native controls function identically to the previous version."
-    ],
-    "technical_details": [
-      "Use `useVideoPlayer` hook for state-driven playback control.",
-      "Update `handlePlaybackStatusUpdate` logic to the new `timeUpdate` event listener format.",
-      "Map `player.src` metadata to the coordinate scaling logic."
-    ],
-    "edge_cases": [
-      "Fast Scrubbing: Ensure the skeleton doesn't lag when the user drags the video progress bar.",
-      "Backgrounding: Handle app suspension to ensure the video player doesn't leak memory."
+      "Remove all expo-av dependencies and imports.",
+      "Initialize player with timeUpdateEventInterval = 0.016.",
+      "Verify 'Clock Pulse' logs appear in the terminal during playback.",
+      "Ensure SkeletonOverlay aligns correctly in both Card and Fullscreen modes."
     ]
   }
 }
+]
