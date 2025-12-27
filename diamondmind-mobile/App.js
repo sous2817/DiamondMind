@@ -6,6 +6,7 @@ import { CheckCircle2, AlertCircle, UploadCloud, XCircle } from 'lucide-react-na
 import UploadService from './src/services/UploadService.js';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { useEventListener } from 'expo-video';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
@@ -26,20 +27,17 @@ export default function App() {
   });
 
   // Sync AI landmarks to video time
-  useEffect(() => {
-    const subscription = player.addEventHandler('timeUpdate', (payload) => {
-      if (result?.frames) {
-        const currentTimeMs = payload.currentTime * 1000; // seconds to ms
-        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
-        if (frame) {
-          setCurrentFrameData(frame.landmarks);
-        }
+  useEventListener(player, 'timeUpdate', (payload) => {
+    if (result?.frames) {
+      // payload.currentTime is in seconds, landmarks use milliseconds
+      const currentTimeMs = payload.currentTime * 1000; 
+
+      const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+      if (frame) {
+        setCurrentFrameData(frame.landmarks);
       }
-    });
-
-    return () => subscription.remove();
-  }, [player, result]);
-
+    }
+  });
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
