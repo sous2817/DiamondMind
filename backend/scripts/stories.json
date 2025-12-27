@@ -1,28 +1,27 @@
 {
-  "summary": "Feature: Skeletal Overlay UI Rendering",
+  "summary": "Feature: AI Bat Path Tracking & Visualization",
   "issuetype": { "name": "Story" },
-  "priority": { "name": "Highest" },
-  "labels": ["Mobile", "Frontend", "Visualization"],
+  "priority": { "name": "High" },
+  "labels": ["AI-Engine", "Mobile", "Computer-Vision"],
   "details": {
-    "user_story": "As a User, I want to see a skeletal overlay drawn over my swing video so that I can visually confirm the AI's tracking and analyze my body positions.",
-    "context": "Now that we have the landmark data and the video, we need to synchronize them and render a visual representation of the 33 MediaPipe points on the mobile UI.",
+    "user_story": "As a Baseball Coach, I want to track the path of the bat through the hitting zone so that I can analyze the player's swing plane and 'time in zone'.",
+    "context": "MediaPipe Pose currently only tracks the 33 body landmarks. To provide professional-grade baseball feedback, we need to implement a secondary detection model or color-based tracking to identify the bat and render its arc.",
     "acceptance_criteria": [
-      "Video Playback: Integrate `expo-av` to play the analyzed swing video.",
-      "SVG Layer: Implement a `react-native-svg` overlay that sits perfectly on top of the video component.",
-      "Coordinate Mapping: Scale the normalized (0.0 - 1.0) landmark coordinates to the actual pixel dimensions of the display.",
-      "Bones/Joints: Draw lines (bones) connecting specific joint IDs (e.g., shoulder to elbow) and circles for the landmarks.",
-      "Sync: Ensure the skeletal frame updates in real-time as the video plays back.",
-      "Performance: The overlay must render smoothly without significant lag or jitter."
+      "Detection: Implement a custom object detection layer (e.g., YOLO or MediaPipe Objectron) to identify the bat in each frame.",
+      "Arc Rendering: Store the bat's 'barrel' coordinates across all frames of the swing.",
+      "Visualization: Render a persistent 'arc' or 'trail' on the SkeletonOverlay that stays visible throughout the swing playback.",
+      "Metrics: Calculate 'Attack Angle' based on the bat's trajectory relative to the ground.",
+      "Sync: Ensure the bat trail remains perfectly aligned with the hand landmarks (IDs 15, 16)."
     ],
     "technical_details": [
-      "Frontend: React Native with `expo-av` for video and `react-native-svg` for rendering.",
-      "Logic: Use a `useRef` to track video playback time and map it to the 'timestamp_ms' in the AI JSON results.",
-      "Assets: Define a 'POSE_CONNECTIONS' constant that maps which landmark IDs should be connected by lines."
+      "AI Engine: Update 'pose_engine.py' to include a bat detection pass.",
+      "Data Structure: Add a 'bat_coords' array to the frames JSON output.",
+      "Frontend: Use 'react-native-svg' Polyline to draw the swing arc trail."
     ],
     "edge_cases": [
-      "Aspect Ratio: Handle cases where the video aspect ratio (e.g., 9:16) differs from the phone screen container.",
-      "Missing Data: Gracefully hide the skeleton if a specific frame has low visibility or missing landmarks.",
-      "Seeking: Ensure the skeleton stays in sync if the user scrubs through the video timeline."
+      "Motion Blur: Handle frames where the bat is moving too fast for clear detection by interpolating between known points.",
+      "Bat Types: Ensure the model recognizes wood, aluminum, and different colored bats.",
+      "Background Noise: Differentiate the bat from the catcher’s mitt or the umpire in the background."
     ]
   }
 }
