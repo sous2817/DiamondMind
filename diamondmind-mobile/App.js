@@ -17,6 +17,8 @@ export default function App() {
   const [currentFrameData, setCurrentFrameData] = useState(null);
   const [videoUri, setVideoUri] = useState(null); 
   const [videoLayout, setVideoLayout] = useState({ width: 0, height: 0 });
+  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
+  const [naturalSize, setNaturalSize] = useState(null);
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -140,18 +142,24 @@ export default function App() {
                 setVideoLayout({ width, height });
               }}
             >
+              
               <Video
                 source={{ uri: videoUri }}
                 style={styles.videoPlayer}
                 resizeMode="contain"
                 useNativeControls
                 isLooping
+                onReadyForDisplay={(event) => {
+                  // This captures the ACTUAL pixels of the video file
+                  setNaturalSize(event.naturalSize);
+                }}
                 onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
               />
               <SkeletonOverlay 
                 landmarks={currentFrameData} 
                 width={videoLayout.width} 
                 height={videoLayout.height} 
+                naturalSize={naturalSize} 
               />
             </View>
 

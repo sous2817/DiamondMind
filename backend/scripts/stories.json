@@ -1,27 +1,24 @@
 {
-  "summary": "Feature: AI Bat Path Tracking & Visualization",
+  "summary": "Optimization: SVG Coordinate Calibration",
   "issuetype": { "name": "Story" },
-  "priority": { "name": "High" },
-  "labels": ["AI-Engine", "Mobile", "Computer-Vision"],
+  "priority": { "name": "Highest" },
+  "labels": ["Frontend", "UI-Bug", "Visualization"],
   "details": {
-    "user_story": "As a Baseball Coach, I want to track the path of the bat through the hitting zone so that I can analyze the player's swing plane and 'time in zone'.",
-    "context": "MediaPipe Pose currently only tracks the 33 body landmarks. To provide professional-grade baseball feedback, we need to implement a secondary detection model or color-based tracking to identify the bat and render its arc.",
+    "user_story": "As a User, I want the skeletal overlay to align perfectly with my body in the video so that the analysis is visually accurate.",
+    "context": "Currently, the SVG overlay uses the container dimensions (videoWrapper), which includes letterboxing (black bars). We need to calculate the 'Active Video Area' and scale landmarks specifically to that area[cite: 57].",
     "acceptance_criteria": [
-      "Detection: Implement a custom object detection layer (e.g., YOLO or MediaPipe Objectron) to identify the bat in each frame.",
-      "Arc Rendering: Store the bat's 'barrel' coordinates across all frames of the swing.",
-      "Visualization: Render a persistent 'arc' or 'trail' on the SkeletonOverlay that stays visible throughout the swing playback.",
-      "Metrics: Calculate 'Attack Angle' based on the bat's trajectory relative to the ground.",
-      "Sync: Ensure the bat trail remains perfectly aligned with the hand landmarks (IDs 15, 16)."
+      "Dynamic Scaling: Update SkeletonOverlay to accept 'naturalSize' from the video player.",
+      "Letterbox Handling: Calculate the X/Y offset for centered videos to prevent the 'floating' effect seen in the screenshot.",
+      "Resize Stability: Ensure the skeleton stays aligned when switching between portrait and landscape videos."
     ],
     "technical_details": [
-      "AI Engine: Update 'pose_engine.py' to include a bat detection pass.",
-      "Data Structure: Add a 'bat_coords' array to the frames JSON output.",
-      "Frontend: Use 'react-native-svg' Polyline to draw the swing arc trail."
+      "Use `onReadyForDisplay` from `expo-av` to get `naturalSize`.",
+      "Implement a mapping function: `targetX = (landmark.x * videoActualWidth) + horizontalOffset`.",
+      "Ensure `SkeletonOverlay` styles use `pointerEvents='none'` to avoid blocking video controls."
     ],
     "edge_cases": [
-      "Motion Blur: Handle frames where the bat is moving too fast for clear detection by interpolating between known points.",
-      "Bat Types: Ensure the model recognizes wood, aluminum, and different colored bats.",
-      "Background Noise: Differentiate the bat from the catcher’s mitt or the umpire in the background."
+      "Vertical Video: Ensure 9:16 'shorts' style videos don't stretch the skeleton horizontally.",
+      "Cropped Videos: Handle videos where the aspect ratio is manually altered by the user before upload."
     ]
   }
 }
