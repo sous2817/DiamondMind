@@ -35,7 +35,7 @@ async def upload_and_analyze(file: UploadFile = File(...)):
         files = {"file": (file.filename, file_content, file.content_type)}
 
         # Forward the request to the AI Service with a generous timeout
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(f"{AI_SERVICE_URL}/analyze/pose", files=files)
         
         if response.status_code != 200:
