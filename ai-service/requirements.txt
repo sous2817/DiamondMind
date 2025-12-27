@@ -12,3 +12,4 @@ jaxlib
 requests
 fastapi
 uvicorn
+python-multipart
