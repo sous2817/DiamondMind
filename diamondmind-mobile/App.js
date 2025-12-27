@@ -12,7 +12,9 @@ export default function App() {
   const [error, setError] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const abortControllerRef = useRef(null);
+  const [progress, setProgress] = useState(0);
 
+  
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
@@ -28,25 +30,27 @@ export default function App() {
   };
 
   const handleUpload = async (uri) => {
-    setLoading(true);
-    setError(null);
-    abortControllerRef.current = new AbortController();
+  setLoading(true);
+  setProgress(0); // Reset progress
+  const jobId = Math.random().toString(36).substring(7); // Simple unique ID
 
-    try {
-      const data = await UploadService.uploadSwingVideo(
-        uri,
-        abortControllerRef.current.signal
-      );
-      if (data) setResult(data);
-    } catch (err) {
-      // Don't show error if we intentionally cancelled
-      if (err.message !== 'canceled') {
-        setError("Analysis failed or timed out.");
-      }
-    } finally {
-      setLoading(false);
-    }
+  // 1. Open the WebSocket to listen for progress
+  const ws = new WebSocket(`wss://diamondmind-vg35.onrender.com/ws/progress/${jobId}`);
+  
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    setProgress(data.progress); // Update the bar!
   };
+
+  try {
+    // 2. Start the upload (pass the jobId so the AI knows who to update)
+    const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
+    if (data) setResult(data);
+  } finally {
+    setLoading(false);
+    ws.close();
+  }
+  };  
 
   const cancelAnalysis = () => {
     if (abortControllerRef.current) {
