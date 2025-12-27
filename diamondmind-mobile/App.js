@@ -25,23 +25,24 @@ export default function App() {
     player.play();
   });
 
-  // Sync AI landmarks to video time using the robust .addListener pattern
   useEffect(() => {
     const subscription = player.addListener('timeUpdate', (payload) => {
-      if (result?.frames) {
-        // AI frames are indexed by milliseconds
-        const currentTimeMs = payload.currentTime * 1000;
-        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
-        if (frame) {
-          setCurrentFrameData(frame.landmarks);
-        }
-      }
-    });
+    // Backup check: If we don't have naturalSize yet, try to grab it from the player
+    if (!naturalSize && player.src?.width) {
+      setNaturalSize({ width: player.src.width, height: player.src.height });
+    }
 
-    return () => {
-      subscription.remove();
-    };
-  }, [player, result]);
+    if (result?.frames) {
+      const currentTimeMs = payload.currentTime * 1000;
+      const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+      if (frame) {
+        setCurrentFrameData(frame.landmarks);
+      }
+    }
+  });
+
+  return () => subscription.remove();
+  }, [player, result, naturalSize]);
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -154,12 +155,17 @@ export default function App() {
                 style={styles.videoPlayer}
                 contentMode="contain"
                 allowsFullscreen
-                onIsVideoOutputReady={() => {
-                  if (player.src?.width) {
-                    setNaturalSize({ width: player.src.width, height: player.src.height });
+                onLoad={(event) => {
+                  // event.source contains the width/height of the video file
+                  if (event.source?.width) {
+                    setNaturalSize({ 
+                      width: event.source.width, 
+                      height: event.source.height 
+                    });
                   }
                 }}
               />
+              
               <SkeletonOverlay
                 landmarks={currentFrameData}
                 width={videoLayout.width}
