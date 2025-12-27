@@ -8,29 +8,34 @@ const POSE_CONNECTIONS = [
 ];
 
 const SkeletonOverlay = ({ landmarks, width, height, naturalSize }) => {
-    //if (!landmarks || !naturalSize || width === 0 || height === 0) return null;
-    if (!landmarks || width === 0 || height === 0) return null;
-    // --- THE MATH SECTION ---
-    // 1. Calculate how the video is being scaled to fit the "contain" mode
-    const scale = Math.min(width / naturalSize.width, height / naturalSize.height);
+    // 1. Strict Guard: Stop if no landmarks or no UI container size
+    if (!landmarks || landmarks.length === 0 || width === 0 || height === 0) {
+        return null;
+    }
 
-    // 2. Calculate the actual width/height of the drawn video
-    const actualVideoWidth = naturalSize.width * scale;
-    const actualVideoHeight = naturalSize.height * scale;
+    // 2. Safe Fallback: If naturalSize isn't ready, use container width/height
+    const vWidth = naturalSize?.width || width;
+    const vHeight = naturalSize?.height || height;
 
-    // 3. Calculate the "Black Bar" offsets (Letterboxing)
+    // 3. Math Section: Scale to fit "contain" mode
+    const scale = Math.min(width / vWidth, height / vHeight);
+    const actualVideoWidth = vWidth * scale;
+    const actualVideoHeight = vHeight * scale;
+
+    // 4. Offset for letterboxing (black bars)
     const offsetX = (width - actualVideoWidth) / 2;
     const offsetY = (height - actualVideoHeight) / 2;
 
     return (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
             <Svg height={height} width={width}>
-                {/* Draw Bones */}
+                {/* Draw Bones (Lines) */}
                 {POSE_CONNECTIONS.map(([startIdx, endIdx], index) => {
                     const start = landmarks[startIdx];
                     const end = landmarks[endIdx];
 
-                    if (!start || !end || start.visibility < 0.5 || end.visibility < 0.5) return null;
+                    // Skip if landmarks are missing or visibility is too low
+                    if (!start || !end || (start.visibility < 0.5) || (end.visibility < 0.5)) return null;
 
                     return (
                         <Line
@@ -45,9 +50,9 @@ const SkeletonOverlay = ({ landmarks, width, height, naturalSize }) => {
                     );
                 })}
 
-                {/* Draw Joints */}
+                {/* Draw Joints (Circles) */}
                 {landmarks.map((lm, index) => {
-                    if (lm.visibility < 0.5) return null;
+                    if (!lm || lm.visibility < 0.5) return null;
                     return (
                         <Circle
                             key={`joint-${index}`}

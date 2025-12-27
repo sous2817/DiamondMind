@@ -26,7 +26,7 @@ export default function App() {
 
   useEffect(() => {
     const subscription = player.addListener('timeUpdate', (payload) => {
-      // Fallback to grab dimensions if onLoad was missed
+      // Optimization: Grab naturalSize from the player source if it's missing
       if (!naturalSize && player.src?.width) {
         setNaturalSize({ width: player.src.width, height: player.src.height });
       }
@@ -34,6 +34,7 @@ export default function App() {
       if (result?.frames) {
         const currentTimeMs = payload.currentTime * 1000;
         const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+
         if (frame) {
           setCurrentFrameData(frame.landmarks);
         }
@@ -42,6 +43,7 @@ export default function App() {
 
     return () => subscription.remove();
   }, [player, result, naturalSize]);
+
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -167,7 +169,8 @@ export default function App() {
                 landmarks={currentFrameData}
                 width={videoLayout.width}
                 height={videoLayout.height}
-                naturalSize={naturalSize}
+                // Fallback: If naturalSize is null, use the layout size so it at least draws SOMETHING
+                naturalSize={naturalSize || { width: videoLayout.width, height: videoLayout.height }}
               />
             </View>
 
