@@ -1,0 +1,7 @@
+__pycache__
+venv
+.env
+.git
+.gitignore
+*.mp4
+output_test.mp4

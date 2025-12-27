@@ -1,253 +1,28 @@
-[
-  {
-    "key": "DM-10",
-    "summary": "Feature: Persistent Cloud Database (PostgreSQL)",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "High" },
-    "labels": ["Backend", "Database"],
-    "details": {
-      "user_story": "As a Developer, I need a centralized cloud database to store user data and swing analysis results so that data persists across sessions and devices.",
-      "context": "Currently, data is likely transient or local. We need a robust relational DB (Supabase/Postgres) to handle the relationships between Users, Videos, and Analysis Data.",
-      "acceptance_criteria": [
-        "PostgreSQL instance is provisioned and accessible via connection string.",
-        "Schema migration scripts created for tables: 'users', 'swings', 'analysis_results'.",
-        "Backend can successfully read/write to the database.",
-        "Environment variables for DB credentials are secured in .env."
-      ],
-      "technical_details": [
-        "Tech: Supabase or standard PostgreSQL.",
-        "Schema: 'swings' table needs foreign key to 'users', and JSONB column for 'skeletal_data'.",
-        "Tooling: Use Alembic or Prisma for migrations."
-      ],
-      "edge_cases": [
-        "Connection Timeout: Handle DB cold starts (common with free tier Supabase).",
-        "Data Integrity: Ensure cascading deletes are configured (if a user is deleted, their swings go too)."
-      ]
-    }
-  },
-  {
-    "key": "DM-11",
-    "summary": "Feature: Delete Swing History",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "Medium" },
-    "labels": ["UI", "DataManagement"],
-    "details": {
-      "user_story": "As a User, I want to delete old or accidental swing uploads so that I can keep my library clean.",
-      "context": "Users need control over their data. This requires a destructive action that removes the record from the DB and the associated video file from storage.",
-      "acceptance_criteria": [
-        "UI provides a 'Delete' button on the Swing Detail view.",
-        "User is prompted with a confirmation modal before deletion.",
-        "Backend removes the database row AND the associated video file from cloud storage.",
-        "List view automatically refreshes to remove the deleted item."
-      ],
-      "technical_details": [
-        "Endpoint: DELETE /swings/{id}",
-        "Storage: Ensure cloud storage deletion (e.g., S3/Supabase Storage delete call)."
-      ],
-      "edge_cases": [
-        "Orphaned Files: If DB delete succeeds but Storage delete fails, log an error for cleanup.",
-        "Concurrency: User tries to delete a file while it is currently being analyzed."
-      ]
-    }
-  },
-  {
-    "key": "DM-12",
-    "summary": "Feature: AI Skeleton Extraction Engine",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "High" },
-    "labels": ["AI", "ComputerVision", "Core"],
-    "details": {
-      "user_story": "As a Player/Coach, I want the app to automatically detect my body joints from a video upload, so that I can receive instant bio-mechanical analysis without manually marking up the video.",
-      "context": "This is the core engine of DiamondMind. We need to ingest raw video footage and output a structured time-series of skeletal coordinates. This data will power the Stick-Figure Overlay and Swing Analysis.",
-      "acceptance_criteria": [
-        "System accepts video input (MP4/MOV) from the local device.",
-        "System extracts 33 key body landmarks (specifically shoulders, elbows, wrists, hips, knees, ankles) for every frame.",
-        "Output is generated in a standardized JSON format (see Tech Details).",
-        "Processing speed is < 5 seconds for a standard 5-second swing clip on the GPU.",
-        "Low-confidence frames (where body parts are hidden) are flagged or interpolated."
-      ],
-      "technical_details": [
-        "Model: MediaPipe Pose (Google) or YOLOv8-Pose. Recommendation: MediaPipe for speed on mobile edge devices.",
-        "Input: Raw video frame buffer (RGB).",
-        "Output: JSON Schema with frame_index, timestamp_ms, and landmarks (x, y, visibility)."
-      ],
-      "edge_cases": [
-        "Occlusion: The bat crossing the body or the camera angle hiding the back arm.",
-        "Motion Blur: Fast bat speeds blurring the hands.",
-        "Multiple People: Ensure the model tracks the *primary* subject (the batter) if other players are in the background."
-      ]
-    }
-  },
-  {
-    "key": "DM-13",
-    "summary": "Feature: Visual Stick-Figure Overlay",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "High" },
-    "labels": ["Frontend", "Visualization"],
-    "details": {
-      "user_story": "As a Coach, I want to see a stick-figure skeleton overlaid on the video so that I can visually verify body positions.",
-      "context": "Visual validation of DM-12. We need to draw lines connecting the extracted coordinate points on top of the video player.",
-      "acceptance_criteria": [
-        "Video player renders SVG or Canvas layer on top of video.",
-        "Skeleton lines connect correct joints (e.g., shoulder to elbow, elbow to wrist).",
-        "Overlay stays synchronized with video playback.",
-        "User can toggle overlay ON/OFF."
-      ],
-      "technical_details": [
-        "Frontend: React Native Skia or SVG.",
-        "Logic: Map normalized (0-1) coordinates from DM-12 JSON to screen pixel dimensions."
-      ],
-      "edge_cases": [
-        "Aspect Ratio Mismatch: Ensure lines align correctly even if video is cropped or scaled.",
-        "Missing Data: Handle frames where DM-12 returned 'null' for a joint (don't draw random lines to 0,0)."
-      ]
-    }
-  },
-  {
-    "key": "DM-14",
-    "summary": "Feature: Text-to-Speech Feedback",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "Medium" },
-    "labels": ["Accessibility", "UX"],
-    "details": {
-      "user_story": "As a Player practicing alone, I want to hear the coaching feedback via audio so I don't have to look at the screen between swings.",
-      "context": "Accessibility and usability feature. Converts the AI's text analysis into spoken word.",
-      "acceptance_criteria": [
-        "App reads the 'Coach Feedback' summary aloud.",
-        "Audio playback controls (Play/Pause/Stop).",
-        "Configurable voice settings (optional).",
-        "Works in background (stretch goal)."
-      ],
-      "technical_details": [
-        "API: ElevenLabs API (High quality) or Native OS TTS (Expo Speech).",
-        "Trigger: Auto-play after analysis or manual button press."
-      ],
-      "edge_cases": [
-        "Silent Mode: Respect device silent/do-not-disturb settings.",
-        "Interruption: Pause speech if a phone call comes in or user navigates away."
-      ]
-    }
-  },
-  {
-    "key": "DM-15",
-    "summary": "Feature: User Profile System",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "High" },
-    "labels": ["Backend", "Auth"],
-    "details": {
-      "user_story": "As a User, I want to create a profile with my age and height so that the AI can calibrate its analysis for me.",
-      "context": "Personalization. 10u players have different metrics than Varsity. We need to store this metadata.",
-      "acceptance_criteria": [
-        "User can sign up/login (Auth).",
-        "Profile settings page allows editing: Name, Age Group (10u/14u/Varsity), Handedness (L/R).",
-        "Backend uses 'Age Group' to select the correct AI Persona (linked to DM-16)."
-      ],
-      "technical_details": [
-        "Auth Provider: Supabase Auth or Firebase.",
-        "Storage: 'users' table columns: id, email, skill_level, height_cm."
-      ],
-      "edge_cases": [
-        "Missing Data: Handle cases where a user hasn't set an age group (Default to '14u').",
-        "Session Expiry: Gracefully handle token expiration during app usage."
-      ]
-    }
-  },
-  {
-    "key": "DM-17",
-    "summary": "Feature: Progressive Web App (PWA)",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "Low" },
-    "labels": ["Web", "Expo"],
-    "details": {
-      "user_story": "As a User, I want to access the app via a web browser so I can view my stats on a laptop.",
-      "context": "Since we use Expo, web support is built-in, but needs configuration for responsiveness and navigation.",
-      "acceptance_criteria": [
-        "App renders correctly in Chrome/Safari on Desktop.",
-        "Layout adapts to wide screens (responsive design).",
-        "Deep links work on web.",
-        "Deployable URL (Vercel)."
-      ],
-      "technical_details": [
-        "Expo Web: Ensure 'react-native-web' is configured.",
-        "Navigation: Verify Expo Router handles URL paths correctly."
-      ],
-      "edge_cases": [
-        "CORS: Ensure Backend API allows requests from the Web domain.",
-        "Camera Access: Web browsers handle camera permissions differently than Native apps."
-      ]
-    }
-  },
-  {
-    "key": "DM-18",
-    "summary": "Feature: Native Wrapper (Capacitor/EAS)",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "Medium" },
-    "labels": ["DevOps", "Mobile"],
-    "details": {
-      "user_story": "As a Mobile User, I want to install the app from the App Store so I have native performance and offline access.",
-      "context": "Moving from development to production builds.",
-      "acceptance_criteria": [
-        "Build pipeline established for iOS (IPA) and Android (APK/AAB).",
-        "App icon and splash screen configured.",
-        "Native permissions (Camera, Microphone) correctly requested in Info.plist/Manifest."
-      ],
-      "technical_details": [
-        "Tooling: Expo EAS Build (preferred over Capacitor for Expo apps).",
-        "Config: app.json updates for bundle identifiers and versioning."
-      ],
-      "edge_cases": [
-        "Store Rejection: Ensure 'Sign in with Apple' is present if other social logins are used (Apple Requirement).",
-        "Build Failures: Handle missing signing credentials."
-      ]
-    }
-  },
-  {
-    "key": "DM-19",
-    "summary": "Feature: Pitching Analysis Mode",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "Medium" },
-    "labels": ["AI", "NewFeature"],
-    "details": {
-      "user_story": "As a Pitcher, I want to analyze my pitching mechanics so I can improve my delivery and prevent injury.",
-      "context": "Different biomechanics than hitting. Needs a separate 'Mode' in the UI and different heuristics for the AI.",
-      "acceptance_criteria": [
-        "UI toggle to switch between 'Hitting' and 'Pitching' modes.",
-        "AI evaluates specific pitching metrics: Stride Length, Arm Slot, Release Point.",
-        "Distinct System Prompt for pitching feedback."
-      ],
-      "technical_details": [
-        "Reuse DM-12 (Skeleton Extraction).",
-        "New heuristic analysis module: `analyze_pitching(landmarks)`."
-      ],
-      "edge_cases": [
-        "Camera Angle: Pitching is often filmed from behind the mound (Hitting is side view). AI must detect or ask for angle.",
-        "Lefties: Ensure arm slot analysis isn't inverted for left-handed pitchers."
-      ]
-    }
-  },
-  {
-    "key": "DM-20",
-    "summary": "Feature: Video Upload Support",
-    "issuetype": { "name": "Story" },
-    "priority": { "name": "High" },
-    "labels": ["UI", "Core"],
-    "details": {
-      "user_story": "As a User, I want to upload existing videos from my camera roll so I can analyze swings recorded previously.",
-      "context": "Currently we might only support live capture. Import is critical for past analysis.",
-      "acceptance_criteria": [
-        "UI opens native device file picker.",
-        "Validates file type (video) and duration (max 10s).",
-        "Uploads file to cloud storage bucket.",
-        "Triggers analysis pipeline upon success."
-      ],
-      "technical_details": [
-        "Library: `expo-image-picker`.",
-        "Backend: Endpoint to accept multipart/form-data upload."
-      ],
-      "edge_cases": [
-        "File Size: Reject files >50MB to prevent timeout.",
-        "Format: Handle HEVC/H.265 (iPhone default) conversion if backend only supports MP4/H.264."
-      ]
-    }
+{
+  "summary": "Feature: Dockerize AI Service for Cloud Deployment",
+  "issuetype": { "name": "Story" },
+  "priority": { "name": "High" },
+  "labels": ["DevOps", "AI", "Infrastructure"],
+  "details": {
+    "user_story": "As a DevOps Engineer, I want to containerize the AI Service using Docker so that it can run reliably on Render (or any cloud provider) with all system-level dependencies pre-installed.",
+    "context": "The AI Service relies on OpenCV (`cv2`) and MediaPipe. These libraries require system-level shared objects (like `libGL` and `libglib`) that are missing in standard 'Python Native' cloud environments. A Docker container is the only way to bundle these OS dependencies.",
+    "acceptance_criteria": [
+      "A `Dockerfile` is created in the `ai-service/` directory.",
+      "The Docker build process successfully installs Python 3.12, system dependencies (`libgl1`, `libglib2.0`), and Python packages.",
+      "The `.task` model file is correctly copied into the container image.",
+      "The container exposes port 8001 and starts the FastAPI server (`uvicorn`) automatically.",
+      "Local testing (`docker run`) confirms the service responds to health checks."
+    ],
+    "technical_details": [
+      "Base Image: `python:3.12-slim` (to keep size down).",
+      "System Deps: Run `apt-get install -y libgl1-mesa-glx libglib2.0-0` before `pip install`.",
+      "Command: `CMD [\"python\", \"main.py\"]` or `uvicorn` entrypoint.",
+      "Port Mapping: Ensure internal port 8001 maps correctly to the host."
+    ],
+    "edge_cases": [
+      "Model File Missing: Ensure the `.dockerignore` file doesn't accidentally exclude the `.task` file.",
+      "Memory Limits: MediaPipe can be RAM hungry; ensure the container isn't immediately OOM (Out of Memory) killed on free-tier hosting.",
+      "Architecture: Ensure the image builds correctly for Linux (amd64) even if developed on Apple Silicon (arm64)."
+    ]
   }
-]
+}
