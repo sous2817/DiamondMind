@@ -7,6 +7,12 @@ import os
 app = FastAPI()
 pose_analyzer = PoseAnalyzer()
 
+# Get the port from the environment, defaulting to 8001 for local dev
+port = int(os.environ.get("PORT", 8001))
+
+# Listen on 0.0.0.0 (Everyone) using the assigned port
+uvicorn.run(app, host="0.0.0.0", port=port)
+
 class VideoAnalysisRequest(BaseModel):
     video_path: str
 
@@ -30,6 +36,3 @@ def analyze_pose(request: VideoAnalysisRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
