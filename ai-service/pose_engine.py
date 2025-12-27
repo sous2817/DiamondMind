@@ -3,45 +3,19 @@ import mediapipe as mp
 import numpy as np
 import requests
 
-def analyze_video_pose(video_path: str):
+def analyze_video_pose(video_path: str, job_id: str = None):
     """
     Reads a video file, runs MediaPipe Pose 'Heavy', 
     and returns a list of landmarks for every frame.
     """
     
-    # Initialize MediaPipe Pose
+    # 1. Setup MediaPipe
     BaseOptions = mp.tasks.BaseOptions
     PoseLandmarker = mp.tasks.vision.PoseLandmarker
     PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
     VisionRunningMode = mp.tasks.vision.RunningMode
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_count = 0
 
-    while cap.isOpened():
-        success, image = cap.read()
-        if not success:
-            break
-            
-        frame_count += 1
-        
-        # ... existing landmark detection code ...
-
-        # Every 10 frames: Send a progress update
-        if job_id and frame_count % 10 == 0:
-            progress = int((frame_count / total_frames) * 100)
-            try:
-                requests.post(
-                    f"https://diamondmind-vg35.onrender.com/api/jobs/{job_id}/progress",
-                    json={"progress": progress},
-                    timeout=1
-                )
-            except Exception as e:
-                print(f"Progress update failed: {e}")
-
-    # Define the model path
     model_path = 'pose_landmarker_heavy.task'
-
-    # Create the landmarker instance
     options = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model_path),
         running_mode=VisionRunningMode.VIDEO
@@ -52,15 +26,17 @@ def analyze_video_pose(video_path: str):
     except Exception as e:
         return {"error": f"Failed to load MediaPipe model: {e}"}
 
-    # Open the video
+    # 2. Open the video inside the function
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return {"error": f"Could not open video file: {video_path}"}
 
     fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frame_count = 0
     results = []
 
+    # 3. Processing Loop
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -76,7 +52,7 @@ def analyze_video_pose(video_path: str):
         # Detect landmarks
         detection_result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-        # Extract data if found
+        # Extract data
         frame_data = {
             "frame": frame_count,
             "timestamp": timestamp_ms,
@@ -84,7 +60,7 @@ def analyze_video_pose(video_path: str):
         }
 
         if detection_result.pose_landmarks:
-            # We only care about the first person detected [0]
+            # Get landmarks for the first detected person
             for i, landmark in enumerate(detection_result.pose_landmarks[0]):
                 frame_data["landmarks"].append({
                     "id": i,
@@ -95,8 +71,23 @@ def analyze_video_pose(video_path: str):
                 })
         
         results.append(frame_data)
+
+        # PROGRESS PULSE: Every 10 frames, notify the backend
+        if job_id and frame_count % 10 == 0:
+            progress = int((frame_count / total_frames) * 100)
+            try:
+                # We use a timeout so the AI isn't held up by a slow pulse
+                requests.post(
+                    f"https://diamondmind-vg35.onrender.com/api/jobs/{job_id}/progress",
+                    json={"progress": progress},
+                    timeout=0.5 
+                )
+            except Exception as e:
+                print(f"Pulse failed: {e}")
+
         frame_count += 1
 
+    # 4. Cleanup
     cap.release()
     landmarker.close()
 

@@ -25,7 +25,8 @@ def health_check():
     return {"status": "healthy", "service": "DiamondMind AI"}
 
 @app.post("/analyze/pose")
-async def analyze_pose_endpoint(file: UploadFile = File(...)):
+async def analyze(file: UploadFile = File(...), job_id: str = None):
+
     """
     Receives a video file, runs MediaPipe Pose estimation, 
     and returns the skeletal data.
@@ -47,7 +48,7 @@ async def analyze_pose_endpoint(file: UploadFile = File(...)):
         print(f"✅ Video saved to: {temp_path}")
 
         # 3. Run the AI Engine (The code you wrote in DM-12!)
-        analysis_result = analyze_video_pose(temp_path)
+        analysis_result = analyze_video_pose(temp_path, job_id=job_id)
 
         if "error" in analysis_result:
              raise HTTPException(status_code=500, detail=analysis_result["error"])

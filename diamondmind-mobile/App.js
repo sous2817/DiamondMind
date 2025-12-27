@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
-// Fixed: Using the modern Safe Area library
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { CheckCircle2, AlertCircle, UploadCloud, XCircle } from 'lucide-react-native';
@@ -11,10 +10,9 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [progress, setProgress] = useState(0); // New: Track AI progress
   const abortControllerRef = useRef(null);
-  const [progress, setProgress] = useState(0);
 
-  
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
@@ -30,35 +28,50 @@ export default function App() {
   };
 
   const handleUpload = async (uri) => {
-  setLoading(true);
-  setProgress(0); // Reset progress
-  const jobId = Math.random().toString(36).substring(7); // Simple unique ID
+    setLoading(true);
+    setError(null);
+    setProgress(0);
+    abortControllerRef.current = new AbortController();
 
-  // 1. Open the WebSocket to listen for progress
-  const ws = new WebSocket(`wss://diamondmind-vg35.onrender.com/ws/progress/${jobId}`);
-  
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    setProgress(data.progress); // Update the bar!
+    // Create a unique Job ID for this specific analysis
+    const jobId = Math.random().toString(36).substring(7);
+
+    // 1. Establish WebSocket Connection for Live Progress
+    const ws = new WebSocket(`wss://diamondmind-vg35.onrender.com/ws/progress/${jobId}`);
+
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.progress) setProgress(data.progress);
+      } catch (err) {
+        console.error("WS Message Error:", err);
+      }
+    };
+
+    try {
+      // 2. Upload the video and pass the jobId to the Backend
+      const data = await UploadService.uploadSwingVideo(
+        uri,
+        jobId, // Pass jobId so the AI knows which channel to pulse to
+        abortControllerRef.current.signal
+      );
+      if (data) setResult(data);
+    } catch (err) {
+      if (err.message !== 'canceled') {
+        setError("Analysis failed or timed out.");
+      }
+    } finally {
+      setLoading(false);
+      ws.close(); // Clean up connection
+    }
   };
 
-  try {
-    // 2. Start the upload (pass the jobId so the AI knows who to update)
-    const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
-    if (data) setResult(data);
-  } finally {
-    setLoading(false);
-    ws.close();
-  }
-  };  
-
   const cancelAnalysis = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    if (abortControllerRef.current) abortControllerRef.current.abort();
     setLoading(false);
     setSelectedFile(null);
     setResult(null);
+    setProgress(0);
   };
 
   return (
@@ -69,7 +82,6 @@ export default function App() {
           <Text style={styles.subtitle}>Pro-Grade Swing Analysis</Text>
         </View>
 
-        {/* 1. INITIAL STATE: The missing Upload Card */}
         {!loading && !result && (
           <TouchableOpacity style={styles.uploadCard} onPress={pickVideo}>
             <UploadCloud size={48} color="#007AFF" />
@@ -78,11 +90,17 @@ export default function App() {
           </TouchableOpacity>
         )}
 
-        {/* 2. LOADING STATE: Combined with Cancel button */}
         {loading && (
           <View style={styles.statusCard}>
             <ActivityIndicator size="large" color="#007AFF" />
             <Text style={styles.loadingText}>Analyzing: {selectedFile}</Text>
+
+            {/* NEW: Progress Bar UI */}
+            <View style={styles.progressContainer}>
+              <View style={[styles.progressBar, { width: `${progress}%` }]} />
+            </View>
+            <Text style={styles.progressText}>{progress}% Complete</Text>
+
             <Text style={styles.waitingText}>Our AI is mapping 33 body points...</Text>
 
             <TouchableOpacity style={styles.cancelButton} onPress={cancelAnalysis}>
@@ -92,7 +110,6 @@ export default function App() {
           </View>
         )}
 
-        {/* 3. SUCCESS STATE */}
         {result && (
           <View style={styles.successCard}>
             <View style={styles.row}>
@@ -107,13 +124,12 @@ export default function App() {
               <Text style={styles.jsonCode}>{JSON.stringify(result.frames[0]?.landmarks[0], null, 2)}</Text>
             </ScrollView>
 
-            <TouchableOpacity style={styles.resetButton} onPress={() => { setResult(null); setSelectedFile(null); }}>
+            <TouchableOpacity style={styles.resetButton} onPress={() => { setResult(null); setSelectedFile(null); setProgress(0); }}>
               <Text style={styles.resetButtonText}>Analyze Another Swing</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* 4. ERROR STATE */}
         {error && (
           <View style={styles.errorCard}>
             <AlertCircle size={24} color="#FF3B30" />
@@ -133,19 +149,17 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', marginTop: 20, marginBottom: 40 },
   title: { fontSize: 32, fontWeight: '900', color: '#1C1C1E', letterSpacing: -1 },
   subtitle: { fontSize: 16, color: '#8E8E93', fontWeight: '500' },
-  uploadCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 40,
-    alignItems: 'center',
-    borderStyle: 'dashed',
-    borderWidth: 2,
-    borderColor: '#007AFF'
-  },
+  uploadCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 40, alignItems: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: '#007AFF' },
   uploadText: { marginTop: 15, fontSize: 18, fontWeight: '600', color: '#1C1C1E' },
   uploadSubtext: { marginTop: 5, fontSize: 14, color: '#8E8E93' },
   statusCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 30, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10 },
-  loadingText: { marginTop: 20, fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  loadingText: { marginTop: 20, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 15 },
+
+  // NEW: Progress Bar Styles
+  progressContainer: { width: '100%', height: 10, backgroundColor: '#E5E5EA', borderRadius: 5, overflow: 'hidden', marginBottom: 10 },
+  progressBar: { height: '100%', backgroundColor: '#007AFF' },
+  progressText: { fontSize: 14, fontWeight: '600', color: '#007AFF', marginBottom: 10 },
+
   waitingText: { marginTop: 8, fontSize: 14, color: '#8E8E93', marginBottom: 10 },
   cancelButton: { flexDirection: 'row', alignItems: 'center', marginTop: 15, padding: 10, backgroundColor: '#FFF5F5', borderRadius: 8, borderWidth: 1, borderColor: '#FFE5E5' },
   cancelButtonText: { color: '#FF3B30', fontWeight: '600', marginLeft: 8 },

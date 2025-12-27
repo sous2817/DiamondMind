@@ -51,29 +51,37 @@ app.add_middleware(
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8001")
 
 @app.post("/api/videos/upload")
-async def upload_and_analyze(file: UploadFile = File(...)):
+async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
     """
     Gateway endpoint: Receives video, forwards to AI Service, returns JSON.
+    Includes job_id for real-time progress tracking via WebSockets.
     """
-    # Validate file extension
+    # 1. Validate file extension
     allowed_extensions = ["mp4", "mov", "avi"]
     ext = file.filename.split(".")[-1].lower()
     if ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     try:
-        # Read the file into memory (limited to 50MB by our constraint)
+        # 2. Read the file into memory
         file_content = await file.read()
         
-        # Prepare the 'multipart/form-data' payload for the AI Service
+        # 3. Prepare payload for AI Service
         files = {"file": (file.filename, file_content, file.content_type)}
-
-        # Forward the request to the AI Service with a generous timeout
+        
+        # 4. Forward to AI Service with job_id as a query parameter
+        # Note: Added params={"job_id": job_id} to the post call
         async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(f"{AI_SERVICE_URL}/analyze/pose", files=files)
+            response = await client.post(
+                f"{AI_SERVICE_URL}/analyze/pose", 
+                files=files,
+                params={"job_id": job_id}
+            )
         
         if response.status_code != 200:
-            ai_error = response.json().get("detail", "Unknown AI Error")
+            # Handle the specific 'cap' error or others from AI Service
+            ai_data = response.json()
+            ai_error = ai_data.get("detail") or ai_data.get("error") or "Unknown AI Error"
             raise HTTPException(status_code=response.status_code, detail=f"AI Service: {ai_error}")
 
         return response.json()
