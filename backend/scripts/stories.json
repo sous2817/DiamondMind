@@ -1,30 +1,28 @@
 {
-  "summary": "Feature: Real-Time Analysis Progress via WebSockets",
-  "issuetype": {
-    "name": "Story"
-  },
-  "priority": {
-    "name": "Medium"
-  },
-  "labels": [
-    "Backend",
-    "AI-Service",
-    "WebSockets"
-  ],
+  "summary": "Feature: Skeletal Overlay UI Rendering",
+  "issuetype": { "name": "Story" },
+  "priority": { "name": "Highest" },
+  "labels": ["Mobile", "Frontend", "Visualization"],
   "details": {
-    "user_story": "As a User, I want to see a real-time progress bar during analysis so that I know exactly how much of my video has been processed.",
-    "context": "Current HTTP implementation is a 'black box' until completion. We need a persistent connection to stream frame-by-frame progress from the AI Engine to the Mobile UI.",
+    "user_story": "As a User, I want to see a skeletal overlay drawn over my swing video so that I can visually confirm the AI's tracking and analyze my body positions.",
+    "context": "Now that we have the landmark data and the video, we need to synchronize them and render a visual representation of the 33 MediaPipe points on the mobile UI.",
     "acceptance_criteria": [
-      "Backend: Implement a WebSocket endpoint `/ws/analysis/{job_id}` using FastAPI.",
-      "AI Service: Update the processing loop to emit a 'progress_update' event after every 5-10 frames.",
-      "Mobile: Replace the static spinner with a percentage-based progress bar (0-100%).",
-      "Reliability: Handle WebSocket disconnection/reconnection if the signal drops mid-swing.",
-      "Cleanup: Ensure WebSocket connections are closed once the final JSON result is delivered."
+      "Video Playback: Integrate `expo-av` to play the analyzed swing video.",
+      "SVG Layer: Implement a `react-native-svg` overlay that sits perfectly on top of the video component.",
+      "Coordinate Mapping: Scale the normalized (0.0 - 1.0) landmark coordinates to the actual pixel dimensions of the display.",
+      "Bones/Joints: Draw lines (bones) connecting specific joint IDs (e.g., shoulder to elbow) and circles for the landmarks.",
+      "Sync: Ensure the skeletal frame updates in real-time as the video plays back.",
+      "Performance: The overlay must render smoothly without significant lag or jitter."
     ],
     "technical_details": [
-      "Protocol: WebSockets (WSS).",
-      "Backend: FastAPI `WebsocketManager` to track active client connections.",
-      "Frontend: React Native `WebSocket` API integrated into the Analysis screen."
+      "Frontend: React Native with `expo-av` for video and `react-native-svg` for rendering.",
+      "Logic: Use a `useRef` to track video playback time and map it to the 'timestamp_ms' in the AI JSON results.",
+      "Assets: Define a 'POSE_CONNECTIONS' constant that maps which landmark IDs should be connected by lines."
+    ],
+    "edge_cases": [
+      "Aspect Ratio: Handle cases where the video aspect ratio (e.g., 9:16) differs from the phone screen container.",
+      "Missing Data: Gracefully hide the skeleton if a specific frame has low visibility or missing landmarks.",
+      "Seeking: Ensure the skeleton stays in sync if the user scrubs through the video timeline."
     ]
   }
 }
