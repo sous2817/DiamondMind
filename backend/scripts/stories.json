@@ -1,28 +1,30 @@
 {
-  "summary": "Feature: Dockerize AI Service for Cloud Deployment",
-  "issuetype": { "name": "Story" },
-  "priority": { "name": "High" },
-  "labels": ["DevOps", "AI", "Infrastructure"],
+  "summary": "Feature: Real-Time Analysis Progress via WebSockets",
+  "issuetype": {
+    "name": "Story"
+  },
+  "priority": {
+    "name": "Medium"
+  },
+  "labels": [
+    "Backend",
+    "AI-Service",
+    "WebSockets"
+  ],
   "details": {
-    "user_story": "As a DevOps Engineer, I want to containerize the AI Service using Docker so that it can run reliably on Render (or any cloud provider) with all system-level dependencies pre-installed.",
-    "context": "The AI Service relies on OpenCV (`cv2`) and MediaPipe. These libraries require system-level shared objects (like `libGL` and `libglib`) that are missing in standard 'Python Native' cloud environments. A Docker container is the only way to bundle these OS dependencies.",
+    "user_story": "As a User, I want to see a real-time progress bar during analysis so that I know exactly how much of my video has been processed.",
+    "context": "Current HTTP implementation is a 'black box' until completion. We need a persistent connection to stream frame-by-frame progress from the AI Engine to the Mobile UI.",
     "acceptance_criteria": [
-      "A `Dockerfile` is created in the `ai-service/` directory.",
-      "The Docker build process successfully installs Python 3.12, system dependencies (`libgl1`, `libglib2.0`), and Python packages.",
-      "The `.task` model file is correctly copied into the container image.",
-      "The container exposes port 8001 and starts the FastAPI server (`uvicorn`) automatically.",
-      "Local testing (`docker run`) confirms the service responds to health checks."
+      "Backend: Implement a WebSocket endpoint `/ws/analysis/{job_id}` using FastAPI.",
+      "AI Service: Update the processing loop to emit a 'progress_update' event after every 5-10 frames.",
+      "Mobile: Replace the static spinner with a percentage-based progress bar (0-100%).",
+      "Reliability: Handle WebSocket disconnection/reconnection if the signal drops mid-swing.",
+      "Cleanup: Ensure WebSocket connections are closed once the final JSON result is delivered."
     ],
     "technical_details": [
-      "Base Image: `python:3.12-slim` (to keep size down).",
-      "System Deps: Run `apt-get install -y libgl1-mesa-glx libglib2.0-0` before `pip install`.",
-      "Command: `CMD [\"python\", \"main.py\"]` or `uvicorn` entrypoint.",
-      "Port Mapping: Ensure internal port 8001 maps correctly to the host."
-    ],
-    "edge_cases": [
-      "Model File Missing: Ensure the `.dockerignore` file doesn't accidentally exclude the `.task` file.",
-      "Memory Limits: MediaPipe can be RAM hungry; ensure the container isn't immediately OOM (Out of Memory) killed on free-tier hosting.",
-      "Architecture: Ensure the image builds correctly for Linux (amd64) even if developed on Apple Silicon (arm64)."
+      "Protocol: WebSockets (WSS).",
+      "Backend: FastAPI `WebsocketManager` to track active client connections.",
+      "Frontend: React Native `WebSocket` API integrated into the Analysis screen."
     ]
   }
 }

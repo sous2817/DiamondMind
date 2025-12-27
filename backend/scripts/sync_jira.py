@@ -11,7 +11,7 @@ JIRA_URL = os.getenv("JIRA_URL")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL")
 JIRA_TOKEN = os.getenv("JIRA_API_TOKEN")
 PROJECT_KEY = os.getenv("PROJECT_KEY")  # Now loaded from .env
-STORIES_FILE = "scripts/stories.json"
+STORIES_FILE = "./backend/scripts/stories.json"
 
 # Validate critical env vars
 if not JIRA_URL or not JIRA_EMAIL or not JIRA_TOKEN or not PROJECT_KEY:
