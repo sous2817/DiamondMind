@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "DiamondMind",
+    "slug": "diamondmind-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DiamondMind needs access to your gallery to analyze your swings.",
+          "videosPermission": "DiamondMind needs access to your gallery to analyze your swings."
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourname.diamondmind"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.yourname.diamondmind"
+    }
+  }
+}
