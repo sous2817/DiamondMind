@@ -1,9 +1,43 @@
 import httpx
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="DiamondMind Main Backend")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict = {}
+
+    async def connect(self, job_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections[job_id] = websocket
+
+    def disconnect(self, job_id: str):
+        if job_id in self.active_connections:
+            del self.active_connections[job_id]
+
+    async def send_progress(self, job_id: str, progress: int):
+        if job_id in self.active_connections:
+            await self.active_connections[job_id].send_json({"progress": progress})
+
+manager = ConnectionManager()
+
+# Endpoint for the AI Service to report progress
+@app.post("/api/jobs/{job_id}/progress")
+async def receive_progress(job_id: str, data: dict):
+    await manager.send_progress(job_id, data["progress"])
+    return {"status": "ok"}
+
+# WebSocket for the Mobile Phone to listen
+@app.websocket("/ws/progress/{job_id}")
+async def websocket_endpoint(websocket: WebSocket, job_id: str):
+    await manager.connect(job_id, websocket)
+    try:
+        while True:
+            await websocket.receive_text() # Keep connection alive
+    except WebSocketDisconnect:
+        manager.disconnect(job_id)
 
 # 1. Update CORS to allow your Vercel Frontend
 app.add_middleware(

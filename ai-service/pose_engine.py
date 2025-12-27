@@ -1,6 +1,7 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import requests
 
 def analyze_video_pose(video_path: str):
     """
@@ -13,7 +14,31 @@ def analyze_video_pose(video_path: str):
     PoseLandmarker = mp.tasks.vision.PoseLandmarker
     PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
     VisionRunningMode = mp.tasks.vision.RunningMode
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_count = 0
 
+    while cap.isOpened():
+        success, image = cap.read()
+        if not success:
+            break
+            
+        frame_count += 1
+        
+        # ... existing landmark detection code ...
+
+        # EVERY 10 FRAMES: Send a progress update
+        if job_id and frame_count % 10 == 0:
+            progress = int((frame_count / total_frames) * 100)
+            try:
+                # Tell the Main Backend where we are
+                requests.post(
+                    f"https://diamondmind-vg35.onrender.com/api/jobs/{job_id}/progress", 
+                    json={"progress": progress}
+                    timeout=1
+                )
+            except:
+                pass # If progress fails, just keep analyzing the swing
+            
     # Define the model path
     model_path = 'pose_landmarker_heavy.task'
 
