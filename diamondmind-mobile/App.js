@@ -25,16 +25,23 @@ export default function App() {
   });
 
   useEffect(() => {
+    // If we don't have a URI or results yet, don't attach listener
+    if (!videoUri || !result) return;
+
+    console.log("Attaching listener to player for URI:", videoUri);
+
     const subscription = player.addListener('timeUpdate', (payload) => {
-      // Optimization: Grab naturalSize from the player source if it's missing
+      // Force capture naturalSize if it's missing
       if (!naturalSize && player.src?.width) {
         setNaturalSize({ width: player.src.width, height: player.src.height });
       }
 
       if (result?.frames) {
         const currentTimeMs = payload.currentTime * 1000;
-        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+        // DEBUG LOG: This will show in your terminal if the listener is alive
+        console.log(`Clock: ${currentTimeMs.toFixed(0)}ms`);
 
+        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
         if (frame) {
           setCurrentFrameData(frame.landmarks);
         }
@@ -42,8 +49,7 @@ export default function App() {
     });
 
     return () => subscription.remove();
-  }, [player, result, naturalSize]);
-
+  }, [player, videoUri, result]);
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
