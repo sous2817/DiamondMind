@@ -19,31 +19,29 @@ export default function App() {
   const [videoLayout, setVideoLayout] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState(null);
 
-  // Initialize the native video player controller
   const player = useVideoPlayer(videoUri, (player) => {
     player.loop = true;
     player.play();
   });
 
   useEffect(() => {
-  const subscription = player.addListener('timeUpdate', (payload) => {
-    // FALLBACK: If naturalSize is missing, try to grab it from the player object
-    if (!naturalSize && player.src?.width) {
-      console.log("Fallback: Captured size from player.src", player.src.width);
-      setNaturalSize({ width: player.src.width, height: player.src.height });
-    }
-
-    if (result?.frames) {
-      const currentTimeMs = payload.currentTime * 1000;
-      const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
-      if (frame) {
-        setCurrentFrameData(frame.landmarks);
+    const subscription = player.addListener('timeUpdate', (payload) => {
+      // Fallback to grab dimensions if onLoad was missed
+      if (!naturalSize && player.src?.width) {
+        setNaturalSize({ width: player.src.width, height: player.src.height });
       }
-    }
-  });
 
-  return () => subscription.remove();
-}, [player, result, naturalSize]);
+      if (result?.frames) {
+        const currentTimeMs = payload.currentTime * 1000;
+        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+        if (frame) {
+          setCurrentFrameData(frame.landmarks);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [player, result, naturalSize]);
 
   const pickVideo = async () => {
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -95,11 +93,6 @@ export default function App() {
     }
   };
 
-  const cancelAnalysis = () => {
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    handleReset();
-  };
-
   const handleReset = () => {
     setResult(null);
     setSelectedFile(null);
@@ -109,6 +102,11 @@ export default function App() {
     setVideoLayout({ width: 0, height: 0 });
     setNaturalSize(null);
     setLoading(false);
+  };
+
+  const cancelAnalysis = () => {
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    handleReset();
   };
 
   return (
@@ -150,25 +148,21 @@ export default function App() {
               <Text style={styles.successTitle}>Swing Analysis Ready</Text>
             </View>
 
-            <View style={styles.videoWrapper} onLayout={(e) => setVideoLayout(e.nativeEvent.layout)}>
+            <View
+              style={styles.videoWrapper}
+              onLayout={(e) => setVideoLayout(e.nativeEvent.layout)}
+            >
               <VideoView
                 player={player}
                 style={styles.videoPlayer}
                 contentMode="contain"
-                fullscreenOptions={{
-                  canEnterFullscreen: true,
-                }}
+                fullscreenOptions={{ canEnterFullscreen: true }}
                 onLoad={(event) => {
                   if (event.source?.width) {
-                    console.log("Success: Captured size from onLoad", event.source.width);
-                    setNaturalSize({ 
-                      width: event.source.width, 
-                      height: event.source.height 
-                    });
+                    setNaturalSize({ width: event.source.width, height: event.source.height });
                   }
                 }}
               />
-              
               <SkeletonOverlay
                 landmarks={currentFrameData}
                 width={videoLayout.width}
