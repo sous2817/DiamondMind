@@ -1,19 +1,17 @@
-[
 {
-  "key": "DM-34",
-  "summary": "Optimization: Migrate Video Engine to expo-video (fix_7)",
+  "key": "DM-40",
+  "summary": "Feature: Export and Download Video with Skeleton Overlay",
   "issuetype": { "name": "Story" },
-  "priority": { "name": "Highest" },
-  "labels": ["Technical-Debt", "Refactor"],
+  "priority": { "name": "High" },
+  "labels": ["Feature", "Media", "Sharing"],
   "details": {
-    "user_story": "As a Developer, I want to use the modern expo-video engine so that I can avoid deprecation warnings while maintaining sub-millisecond skeleton sync.",
-    "context": "Initial migration failed due to inconsistent timeUpdate events. Implementing explicit timeUpdateEventInterval to match 60fps tracking requirements.",
+    "user_story": "As a User, I want to download the analyzed video with the green skeleton overlay burned in so that I can share it with my coach or post it to social media.",
+    "context": "The overlay is currently rendered in real-time as an SVG. Exporting requires merging the video stream with the SVG coordinate layer into a single file.",
     "acceptance_criteria": [
-      "Remove all expo-av dependencies and imports.",
-      "Initialize player with timeUpdateEventInterval = 0.016.",
-      "Verify 'Clock Pulse' logs appear in the terminal during playback.",
-      "Ensure SkeletonOverlay aligns correctly in both Card and Fullscreen modes."
+      "Add a 'Download Analysis' button to the results card and fullscreen view.",
+      "Merge VideoView content with SkeletonOverlay into a new MP4.",
+      "Save the resulting file to the device's Media Library or Files app.",
+      "Provide a native Share Sheet after successful export."
     ]
   }
 }
-]

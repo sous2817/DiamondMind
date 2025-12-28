@@ -2,10 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, LogBox } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { UploadCloud, Maximize2, Minimize2, AlertCircle, XCircle } from 'lucide-react-native';
+import { UploadCloud, Maximize2, Minimize2, AlertCircle, XCircle, Download } from 'lucide-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import UploadService from './src/services/UploadService.js';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F2F2F7', padding: 20 },
@@ -20,7 +23,8 @@ const styles = StyleSheet.create({
   progressBar: { height: '100%', backgroundColor: '#007AFF' },
   progressText: { fontSize: 14, fontWeight: '600', color: '#007AFF', marginBottom: 5 },
   successCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
-  // Removed hardcoded aspectRatio to allow dynamic sizing
+  cancelButton: { flexDirection: 'row', alignItems: 'center', marginTop: 15, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#FFF5F5', borderRadius: 10, borderWidth: 1, borderColor: '#FF3B30' },
+  cancelButtonText: { color: '#FF3B30', fontWeight: '700', marginLeft: 8 },
   videoWrapper: { width: '100%', backgroundColor: '#000', borderRadius: 15, overflow: 'hidden', position: 'relative' },
   resetButton: { marginTop: 20, backgroundColor: '#007AFF', padding: 15, borderRadius: 12, alignItems: 'center' },
   resetButtonText: { color: '#FFF', fontWeight: '700' },
@@ -29,6 +33,8 @@ const styles = StyleSheet.create({
   modernExpandButton: { position: 'absolute', backgroundColor: 'rgba(28, 28, 30, 0.8)', alignItems: 'center', justifyContent: 'center', zIndex: 1001 },
   errorCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, alignItems: 'center' },
   errorText: { color: '#1C1C1E', fontWeight: '600', marginVertical: 10 },
+  retryButton: { backgroundColor: '#F2F2F7', padding: 10, borderRadius: 8 },
+  retryText: { color: '#007AFF', fontWeight: '700' },
 });
 
 export default function App() {
@@ -44,6 +50,8 @@ export default function App() {
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [fullscreenDimensions, setFullscreenDimensions] = useState({ width: 0, height: 0 });
+  const viewShotRef = useRef(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const player = useVideoPlayer(videoUri, (p) => {
     p.loop = true;
@@ -51,16 +59,27 @@ export default function App() {
     p.play();
   });
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const uri = await captureRef(viewShotRef, { format: 'png', quality: 0.8 });
+      await Sharing.shareAsync(uri);
+    } catch (err) {
+      console.error("Export Failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   useEffect(() => {
     if (!player || !videoUri || !result) return;
-    const subscription = player.addListener('timeUpdate', (payload) => {
+    const sub = player.addListener('timeUpdate', (payload) => {
       if (result?.frames) {
-        const currentTimeMs = payload.currentTime * 1000;
-        const frame = result.frames.find(f => f.timestamp >= currentTimeMs);
+        const frame = result.frames.find(f => f.timestamp >= payload.currentTime * 1000);
         if (frame) setCurrentFrameData(frame.landmarks);
       }
     });
-    return () => subscription.remove();
+    return () => sub.remove();
   }, [player, videoUri, result]);
 
   const handleUpload = async (uri) => {
@@ -69,10 +88,8 @@ export default function App() {
     const jobId = Math.random().toString(36).substring(7);
     const ws = new WebSocket(`wss://diamondmind-vg35.onrender.com/ws/progress/${jobId}`);
     ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.progress) setProgress(data.progress);
-      } catch (err) { console.error("WS Error", err); }
+      const data = JSON.parse(e.data);
+      if (data.progress) setProgress(data.progress);
     };
     try {
       const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
@@ -85,13 +102,11 @@ export default function App() {
   };
 
   const pickVideo = async () => {
-    let pickerResult = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
-    if (pickerResult.canceled) return;
-    const asset = pickerResult.assets[0];
-
-    // Store video dimensions
+    let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
+    if (res.canceled) return;
+    const asset = res.assets[0];
     setVideoDimensions({ width: asset.width, height: asset.height });
-
+    setSelectedFile(asset.fileName || "swing.mp4");
     setVideoUri(asset.uri);
     player.replace(asset.uri);
     player.play();
@@ -103,47 +118,24 @@ export default function App() {
     setCurrentFrameData(null); setIsFullscreen(false);
   };
 
-  // Helper to get dynamic aspect ratio
   const videoRatio = player.src?.width ? player.src.width / player.src.height : 1.77;
 
   return (
     <SafeAreaProvider>
-      {/* 1. FULLSCREEN LAYER */}
       {result && isFullscreen && (
         <View style={styles.fullscreenContainer}>
-          <View
-            style={styles.fullscreenVideoWrapper}
-            onLayout={(e) => {
-              const { width, height } = e.nativeEvent.layout;
-              setFullscreenDimensions({ width, height });
-            }}
-          >
-            <VideoView
-              player={player}
-              style={StyleSheet.absoluteFill}
-              contentMode="contain"
-            />
+          <View style={styles.fullscreenVideoWrapper} onLayout={(e) => setFullscreenDimensions(e.nativeEvent.layout)}>
+            <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              <SkeletonOverlay
-                landmarks={currentFrameData}
-                videoWidth={videoDimensions.width}
-                videoHeight={videoDimensions.height}
-                containerWidth={fullscreenDimensions.width}
-                containerHeight={fullscreenDimensions.height}
-              />
+              <SkeletonOverlay landmarks={currentFrameData} videoWidth={videoDimensions.width} videoHeight={videoDimensions.height} containerWidth={fullscreenDimensions.width} containerHeight={fullscreenDimensions.height} />
             </View>
-
-            <TouchableOpacity
-              style={[styles.modernExpandButton, { bottom: 60, right: 24, width: 50, height: 50, borderRadius: 25 }]}
-              onPress={() => setIsFullscreen(false)}
-            >
+            <TouchableOpacity style={[styles.modernExpandButton, { bottom: 60, right: 24, width: 50, height: 50, borderRadius: 25 }]} onPress={() => setIsFullscreen(false)}>
               <Minimize2 size={22} color="#FFF" />
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {/* 2. MAIN APP LAYER */}
       {!isFullscreen && (
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
@@ -161,57 +153,34 @@ export default function App() {
           {loading && (
             <View style={styles.statusCard}>
               <ActivityIndicator size="large" color="#007AFF" />
-              <View style={styles.progressContainer}>
-                <View style={[styles.progressBar, { width: `${progress}%` }]} />
-              </View>
-              <Text style={styles.progressText}>{progress}% Complete</Text>
+              <Text style={styles.loadingText}>Analyzing: {selectedFile}</Text>
+              <View style={styles.progressContainer}><View style={[styles.progressBar, { width: `${progress}%` }]} /></View>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => { abortControllerRef.current?.abort(); setLoading(false); }}>
+                <XCircle size={20} color="#FF3B30" /><Text style={styles.cancelButtonText}>Cancel Upload</Text>
+              </TouchableOpacity>
             </View>
           )}
 
           {result && (
             <View style={styles.successCard}>
-              {/* REPLACE THIS ENTIRE SECTION */}
-              <View
-                style={[styles.videoWrapper, { aspectRatio: videoRatio }]}
-                onLayout={(e) => {
-                  const { width, height } = e.nativeEvent.layout;
-                  setContainerDimensions({ width, height });
-                }}
-              >
-                <VideoView
-                  player={player}
-                  style={StyleSheet.absoluteFill}
-                  contentMode="contain"
-                />
+              <View ref={viewShotRef} style={[styles.videoWrapper, { aspectRatio: videoRatio }]} onLayout={(e) => setContainerDimensions(e.nativeEvent.layout)}>
+                <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <SkeletonOverlay
-                    landmarks={currentFrameData}
-                    videoWidth={videoDimensions.width}
-                    videoHeight={videoDimensions.height}
-                    containerWidth={containerDimensions.width}
-                    containerHeight={containerDimensions.height}
-                  />
+                  <SkeletonOverlay landmarks={currentFrameData} videoWidth={videoDimensions.width} videoHeight={videoDimensions.height} containerWidth={containerDimensions.width} containerHeight={containerDimensions.height} />
                 </View>
-
-                <TouchableOpacity
-                  style={[styles.modernExpandButton, { bottom: 10, right: 10, width: 40, height: 40, borderRadius: 20 }]}
-                  onPress={() => setIsFullscreen(true)}
-                >
+                <TouchableOpacity style={[styles.modernExpandButton, { bottom: 10, right: 10, width: 40, height: 40, borderRadius: 20 }]} onPress={() => setIsFullscreen(true)}>
                   <Maximize2 size={18} color="#FFF" />
                 </TouchableOpacity>
               </View>
-              {/* END REPLACEMENT */}
 
-              <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
-                <Text style={styles.resetButtonText}>Analyze New Swing</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {error && (
-            <View style={styles.errorCard}>
-              <AlertCircle size={24} color="#FF3B30" />
-              <Text style={styles.errorText}>{error}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15 }}>
+                <TouchableOpacity style={[styles.resetButton, { flex: 1, marginTop: 0, marginRight: 10, backgroundColor: '#E5E5EA' }]} onPress={handleReset}>
+                  <Text style={[styles.resetButtonText, { color: '#1C1C1E' }]}>New Swing</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.resetButton, { flex: 1, marginTop: 0, backgroundColor: isExporting ? '#8E8E93' : '#007AFF' }]} onPress={handleExport} disabled={isExporting}>
+                  {isExporting ? <ActivityIndicator color="#FFF" /> : <><Download size={20} color="#FFF" style={{ marginRight: 8 }} /><Text style={styles.resetButtonText}>Download</Text></>}
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </SafeAreaView>
