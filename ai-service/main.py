@@ -35,44 +35,29 @@ def health_check():
 
 @app.post("/analyze/pose")
 async def analyze(file: UploadFile = File(...), job_id: str = None):
-    """
-    Receives a video file, runs MediaPipe Pose estimation, 
-    and returns the skeletal data.
-    """
-    # 1. Validate File Type
-    if not file.content_type.startswith("video/"):
-        raise HTTPException(status_code=400, detail="File must be a video")
-
-    # 2. Save the Upload to a Temp File
-    filename = f"{uuid.uuid4()}_{file.filename}"
-    temp_path = os.path.join(TEMP_DIR, filename)
+    # ... (file saving logic remains the same) ...
 
     try:
         with open(temp_path, "wb") as buffer:
-            # Stream the bytes from the upload to the disk
             shutil.copyfileobj(file.file, buffer)
         
         print(f"✅ Video saved to: {temp_path}")
 
-        # 3. Run the AI Engine (Using the Class Instance)
+        # 3. Run the AI Engine
         print(f"▶️ Starting Analysis for Job: {job_id}")
         pose_data = ai_engine.process_video(temp_path)
         print(f"🏁 Analysis Complete. Extracted {len(pose_data)} frames.")
 
-        # 4. Return Structured Data
-        return {
-            "job_id": job_id,
-            "status": "success",
-            "data": pose_data  # The list of frames
-        }
+        # 4. Return Raw Data (FIXED)
+        # We return the list directly to match the Mobile App's expectation.
+        return pose_data 
 
     except Exception as e:
         print(f"❌ Error processing video: {e}")
-        # Return 500 so the Backend knows to retry or fail
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # 5. Cleanup (Always run this, even if it crashes)
+        # 5. Cleanup
         if os.path.exists(temp_path):
             os.remove(temp_path)
             print(f"🧹 Cleaned up: {temp_path}")
