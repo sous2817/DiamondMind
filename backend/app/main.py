@@ -86,7 +86,15 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
 
         return response.json()
 
-    except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="AI Service is currently unreachable.")
+    except httpx.ConnectError as e:
+        # PRINT THIS
+        print(f"❌ CONNECTION ERROR to AI Service: {e}")
+        raise HTTPException(status_code=503, detail="AI Service is unreachable.")
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # PRINT THIS
+        import traceback
+        traceback.print_exc() # <--- This will print the full stack trace to Render logs
+        print(f"❌ GENERIC ERROR: {e}") 
+        raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")
+        

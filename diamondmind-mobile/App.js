@@ -83,21 +83,40 @@ export default function App() {
   }, [player, videoUri, result]);
 
   const handleUpload = async (uri) => {
-    setLoading(true); setError(null); setProgress(0);
+    setLoading(true);
+    setError(null);
+    setProgress(0);
+
     abortControllerRef.current = new AbortController();
     const jobId = Math.random().toString(36).substring(7);
+
+    // Note: Ensure this URL matches your backend environment
     const ws = new WebSocket(`wss://diamondmind-vg35.onrender.com/ws/progress/${jobId}`);
+
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.progress) setProgress(data.progress);
     };
+
     try {
       const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
       if (data) setResult(data);
     } catch (err) {
-      if (err.message !== 'canceled') setError("Analysis failed.");
+      // 🚨 1. LOG THE ACTUAL ERROR TO CONSOLE
+      console.error("❌ UPLOAD FAILED:", err);
+      if (err.response) {
+        console.error("❌ SERVER DATA:", err.response.data);
+        console.error("❌ STATUS CODE:", err.response.status);
+      }
+
+      if (err.message !== 'canceled') {
+        // 🚨 2. Capture the real message for the UI
+        const msg = err.response?.data?.detail || err.message || "Analysis failed.";
+        setError(msg);
+      }
     } finally {
-      setLoading(false); ws.close();
+      setLoading(false);
+      ws.close();
     }
   };
 
@@ -134,6 +153,24 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
+      )}
+
+      {error && (
+        <View style={styles.errorCard}>
+          <AlertCircle size={48} color="#FF3B30" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => setError(null)}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Existing Upload Button Logic */}
+      {!loading && !result && !error && (
+        // Note: Added !error check above so they don't overlap
+        <TouchableOpacity style={styles.uploadCard} onPress={pickVideo}>
+          {/* ... existing upload card content ... */}
+        </TouchableOpacity>
       )}
 
       {!isFullscreen && (
