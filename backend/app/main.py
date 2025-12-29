@@ -50,11 +50,17 @@ app.add_middleware(
 # 2. Get the AI Service URL from Environment Variables
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8001")
 
+# --- HELPER: STREAMING GENERATOR ---
+async def stream_file(file: UploadFile):
+    """Yields file chunks to prevent loading entire video into memory."""
+    while chunk := await file.read(1024 * 1024):  # Read 1MB chunks
+        yield chunk
+
 @app.post("/api/videos/upload")
 async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
     """
-    Gateway endpoint: Receives video, forwards to AI Service, returns JSON.
-    Includes job_id for real-time progress tracking via WebSockets.
+    Gateway endpoint: Streams video directly to AI Service.
+    Uses generator to avoid RAM spikes on Render Free Tier.
     """
     # 1. Validate file extension
     allowed_extensions = ["mp4", "mov", "avi"]
@@ -63,15 +69,12 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     try:
-        # 2. Read the file into memory
-        file_content = await file.read()
+        # 2. Prepare the streaming upload (NO reading into variable!)
+        # We manually construct the multipart stream
+        files = {"file": (file.filename, stream_file(file), file.content_type)}
         
-        # 3. Prepare payload for AI Service
-        files = {"file": (file.filename, file_content, file.content_type)}
-        
-        # 4. Forward to AI Service with job_id as a query parameter
-        # Note: Added params={"job_id": job_id} to the post call
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        # 3. Forward to AI Service with extended timeout
+        async with httpx.AsyncClient(timeout=300.0) as client: # Increased to 300s
             response = await client.post(
                 f"{AI_SERVICE_URL}/analyze/pose", 
                 files=files,
@@ -80,18 +83,21 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
         
         if response.status_code != 200:
             # Handle the specific 'cap' error or others from AI Service
-            ai_data = response.json()
-            ai_error = ai_data.get("detail") or ai_data.get("error") or "Unknown AI Error"
+            try:
+                ai_data = response.json()
+                ai_error = ai_data.get("detail") or ai_data.get("error") or "Unknown AI Error"
+            except:
+                ai_error = response.text
             raise HTTPException(status_code=response.status_code, detail=f"AI Service: {ai_error}")
 
         return response.json()
 
+    except httpx.ReadTimeout:
+        raise HTTPException(status_code=504, detail="AI Processing Timed Out (Limit: 300s)")
+
     except httpx.ConnectError:
-        # Reverted to standard HTTP exception
         raise HTTPException(status_code=503, detail="AI Service is currently unreachable.")
         
     except Exception as e:
-        # Removed traceback.print_exc() to reduce log noise
-        print(f"Upload Error: {str(e)}") # Keep a simple one-liner for visibility
+        print(f"Upload Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")
-        
