@@ -18,7 +18,7 @@ const UploadService = {
         try {
             // Send the jobId as a query parameter so the backend knows who to pulse
             const response = await axios.post(`${API_URL}/api/videos/upload?job_id=${jobId}`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
+                // headers: { 'Content-Type': 'multipart/form-data' }, <- 12/28 test
                 timeout: 120000,
                 signal: signal,
             });
