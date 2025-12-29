@@ -52,13 +52,13 @@ async def analyze(file: UploadFile = File(...), job_id: str = None):
         
         print(f"✅ Video saved to: {temp_path}")
 
-        # 3. Run the AI Engine
+        # 3. Run the AI Engine (Update this line to pass job_id)
         print(f"▶️ Starting Analysis for Job: {job_id}")
-        pose_data = ai_engine.process_video(temp_path)
+
+        pose_data = ai_engine.process_video(temp_path, job_id=job_id)
+        
         print(f"🏁 Analysis Complete. Extracted {len(pose_data)} frames.")
 
-        # 4. Return Raw Data (List of frames)
-        # We return the list directly to match the Mobile App's expectation.
         return pose_data
 
     except Exception as e:
