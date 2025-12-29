@@ -3,7 +3,6 @@ import shutil
 import uuid
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-# UPDATED IMPORT: We import the class, not the old function
 from pose_engine import PoseExtractor
 
 app = FastAPI(title="DiamondMind AI Service")
@@ -20,11 +19,9 @@ app.add_middleware(
 TEMP_DIR = "/tmp/dm_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# --- CRITICAL OPTIMIZATION ---
-# Initialize the AI Engine ONCE when the server starts.
-# This prevents reloading the heavy ML model for every single request.
-# We use model_complexity=0 (Lite) for maximum speed.
+# --- AI MODEL INITIALIZATION ---
 print("🧠 Initializing AI Model...")
+# model_complexity=0 is the "Lite" model (Fastest)
 ai_engine = PoseExtractor(model_complexity=0)
 print("✅ AI Model Ready.")
 
@@ -35,10 +32,22 @@ def health_check():
 
 @app.post("/analyze/pose")
 async def analyze(file: UploadFile = File(...), job_id: str = None):
-    # ... (file saving logic remains the same) ...
+    """
+    Receives a video file, runs MediaPipe Pose estimation, 
+    and returns the skeletal data.
+    """
+    # 1. Validate File Type
+    if not file.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="File must be a video")
+
+    # 2. Save the Upload to a Temp File
+    # THIS WAS THE MISSING PART:
+    filename = f"{uuid.uuid4()}_{file.filename}"
+    temp_path = os.path.join(TEMP_DIR, filename)
 
     try:
         with open(temp_path, "wb") as buffer:
+            # Stream the bytes from the upload to the disk
             shutil.copyfileobj(file.file, buffer)
         
         print(f"✅ Video saved to: {temp_path}")
@@ -48,17 +57,17 @@ async def analyze(file: UploadFile = File(...), job_id: str = None):
         pose_data = ai_engine.process_video(temp_path)
         print(f"🏁 Analysis Complete. Extracted {len(pose_data)} frames.")
 
-        # 4. Return Raw Data (FIXED)
+        # 4. Return Raw Data (List of frames)
         # We return the list directly to match the Mobile App's expectation.
-        return pose_data 
+        return pose_data
 
     except Exception as e:
         print(f"❌ Error processing video: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # 5. Cleanup
-        if os.path.exists(temp_path):
+        # 5. Cleanup (Always run this, even if it crashes)
+        if 'temp_path' in locals() and os.path.exists(temp_path):
             os.remove(temp_path)
             print(f"🧹 Cleaned up: {temp_path}")
 
