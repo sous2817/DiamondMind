@@ -74,6 +74,7 @@ export default function App() {
   useEffect(() => {
     if (!player || !videoUri || !result) return;
     const sub = player.addListener('timeUpdate', (payload) => {
+      // The fix: result.frames logic now matches the data wrapper below
       if (result?.frames) {
         const frame = result.frames.find(f => f.timestamp >= payload.currentTime * 1000);
         if (frame) setCurrentFrameData(frame.landmarks);
@@ -90,19 +91,34 @@ export default function App() {
     abortControllerRef.current = new AbortController();
     const jobId = Math.random().toString(36).substring(7);
 
-    // Note: Ensure this URL matches your backend environment
-    const ws = new WebSocket(`wss://diamondmind-vg35.onrender.com/ws/progress/${jobId}`);
+    // 🔧 FIX: Use the correct backend URL (changed from diamondmind-vg35)
+    const ws = new WebSocket(`wss://diamondmind-backend-yalf.onrender.com/ws/progress/${jobId}`);
+
+    console.log(`📡 WebSocket connecting to job: ${jobId}`);
 
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
+      console.log(`📊 Progress update: ${data.progress}%`);
       if (data.progress) setProgress(data.progress);
+    };
+
+    ws.onerror = (err) => {
+      console.error("❌ WebSocket Error:", err);
+    };
+
+    ws.onopen = () => {
+      console.log("✅ WebSocket connected");
     };
 
     try {
       const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
+      console.log("✅ Analysis complete:", {
+        totalFrames: data?.frames?.length,
+        framesWithPerson: data?.frames_with_person,
+        firstFrame: data?.frames?.[0]
+      });
       if (data) setResult(data);
     } catch (err) {
-      // 🚨 1. LOG THE ACTUAL ERROR TO CONSOLE
       console.error("❌ UPLOAD FAILED:", err);
       if (err.response) {
         console.error("❌ SERVER DATA:", err.response.data);
@@ -110,7 +126,6 @@ export default function App() {
       }
 
       if (err.message !== 'canceled') {
-        // 🚨 2. Capture the real message for the UI
         const msg = err.response?.data?.detail || err.message || "Analysis failed.";
         setError(msg);
       }
@@ -165,12 +180,8 @@ export default function App() {
         </View>
       )}
 
-      {/* Existing Upload Button Logic */}
       {!loading && !result && !error && (
-        // Note: Added !error check above so they don't overlap
-        <TouchableOpacity style={styles.uploadCard} onPress={pickVideo}>
-          {/* ... existing upload card content ... */}
-        </TouchableOpacity>
+        <View />
       )}
 
       {!isFullscreen && (

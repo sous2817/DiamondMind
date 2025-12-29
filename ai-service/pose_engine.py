@@ -4,12 +4,9 @@ import requests
 import os
 
 # Hardcoded Backend URL (Tribal Knowledge: Service-to-Service wiring)
-# In production, this should be an env var, but we'll lock it here for stability.
 BACKEND_URL = "https://diamondmind-backend-yalf.onrender.com"
 
 class PoseExtractor:
-    # RESTORED: model_complexity=1 (Standard) to ensure we detect the player.
-    # 0 was too fast/dumb and likely caused the "missing overlay" by missing the person.
     def __init__(self, static_image_mode=False, model_complexity=1, min_detection_confidence=0.5):
         self.mp_pose = mp.solutions.pose
         self.pose = self.mp_pose.Pose(
@@ -26,8 +23,10 @@ class PoseExtractor:
         try:
             url = f"{BACKEND_URL}/api/jobs/{job_id}/progress"
             requests.post(url, json={"progress": int(progress)}, timeout=1)
-        except:
+            print(f"📊 Progress reported: {int(progress)}%")
+        except Exception as e:
             # Ignore connection errors to keep processing alive
+            print(f"⚠️ Progress report failed: {e}")
             pass
 
     def process_video(self, video_path, job_id=None):
@@ -36,11 +35,13 @@ class PoseExtractor:
 
         cap = cv2.VideoCapture(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30  # Fallback to 30fps if not detected
         frame_count = 0
-        output_data = []
-        valid_frames = 0 # Counter for frames where we actually found a person
+        frames = []  # Changed from output_data to match mobile app's expected key
+        valid_frames = 0
 
         print(f"🎬 Starting processing: {video_path} (Job: {job_id})")
+        print(f"📹 Video info: {total_frames} frames, {fps} fps")
 
         while cap.isOpened():
             success, frame = cap.read()
@@ -53,29 +54,34 @@ class PoseExtractor:
             # Process
             results = self.pose.process(frame_rgb)
             
-            frame_data = {
-                "frame_index": frame_count,
-                "timestamp_ms": cap.get(cv2.CAP_PROP_POS_MSEC),
-                "landmarks": {}
-            }
-
+            # Calculate timestamp in milliseconds
+            timestamp_ms = (frame_count / fps) * 1000
+            
+            # 🔧 FIX: Build landmarks as an ARRAY (not a dict)
+            landmarks_array = None
+            
             if results.pose_landmarks:
                 valid_frames += 1
-                for idx, landmark in enumerate(results.pose_landmarks.landmark):
-                    landmark_name = self.mp_pose.PoseLandmark(idx).name
-                    frame_data["landmarks"][landmark_name] = {
+                # MediaPipe returns 33 landmarks (0-32)
+                landmarks_array = []
+                for landmark in results.pose_landmarks.landmark:
+                    landmarks_array.append({
                         "x": landmark.x,
                         "y": landmark.y,
                         "z": landmark.z,
                         "visibility": landmark.visibility
-                    }
-            else:
-                frame_data["landmarks"] = None 
+                    })
+            
+            # 🔧 FIX: Use the exact keys the mobile app expects
+            frame_data = {
+                "timestamp": timestamp_ms,  # Changed from timestamp_ms
+                "landmarks": landmarks_array  # Now an array or None
+            }
 
-            output_data.append(frame_data)
+            frames.append(frame_data)
             frame_count += 1
 
-            # Report progress every 10 frames (to avoid flooding the network)
+            # Report progress every 10 frames
             if job_id and frame_count % 10 == 0:
                 percent = (frame_count / total_frames) * 100
                 self.report_progress(job_id, percent)
@@ -89,4 +95,13 @@ class PoseExtractor:
         print(f"✅ Complete. Processed {frame_count} frames.")
         print(f"👀 Detection Stats: Found person in {valid_frames}/{frame_count} frames.")
         
-        return output_data
+        if valid_frames == 0:
+            print("⚠️ WARNING: No person detected in any frame! Check video quality/lighting.")
+        
+        # 🔧 FIX: Return the structure the mobile app expects
+        return {
+            "frames": frames,
+            "total_frames": frame_count,
+            "frames_with_person": valid_frames,
+            "fps": fps
+        }
