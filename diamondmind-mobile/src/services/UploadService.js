@@ -1,30 +1,27 @@
-import axios from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
 
-const API_URL = "https://diamondmind-vg35.onrender.com";
+const API_URL = "https://diamondmind-backend-yalf.onrender.com"; 
 
 const UploadService = {
     uploadSwingVideo: async (fileUri, jobId, signal) => {
-        const formData = new FormData();
-        const filename = fileUri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `video/${match[1]}` : `video/mp4`;
-
-        formData.append('file', {
-            uri: fileUri,
-            name: filename,
-            type: type,
-        });
-
+        const url = `${API_URL}/api/videos/upload?job_id=${jobId}`;
+        
         try {
-            // Send the jobId as a query parameter so the backend knows who to pulse
-            const response = await axios.post(`${API_URL}/api/videos/upload?job_id=${jobId}`, formData, {
-                // headers: { 'Content-Type': 'multipart/form-data' }, <- 12/28 test
-                timeout: 120000,
-                signal: signal,
+            const response = await FileSystem.uploadAsync(url, fileUri, {
+                fieldName: 'file',
+                httpMethod: 'POST',
+                uploadType: 1, // Multipart
             });
-            return response.data;
+
+            if (response.status >= 200 && response.status < 300) {
+                return JSON.parse(response.body);
+            } else {
+                // Keep this error throw, as it helps the UI show the specific error message
+                throw new Error(`Server Error ${response.status}: ${response.body}`);
+            }
         } catch (error) {
-            if (axios.isCancel(error)) return null;
+            // Keep error logging, but make it concise
+            console.error("UploadService Error:", error.message);
             throw error;
         }
     }
