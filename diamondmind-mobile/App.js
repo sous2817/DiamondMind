@@ -9,6 +9,7 @@ import SkeletonOverlay from './src/components/SkeletonOverlay';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import { Config } from './src/config.js';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F2F2F7', padding: 20 },
@@ -92,7 +93,7 @@ export default function App() {
     const jobId = Math.random().toString(36).substring(7);
 
     // 🔧 FIX: Use the correct backend URL (changed from diamondmind-vg35)
-    const ws = new WebSocket(`wss://diamondmind-backend-yalf.onrender.com/ws/progress/${jobId}`);
+    const ws = new WebSocket(`${Config.WS_BASE_URL}/ws/progress/${jobId}`);
 
     console.log(`📡 WebSocket connecting to job: ${jobId}`);
 

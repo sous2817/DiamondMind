@@ -3,8 +3,10 @@ import cv2
 import requests
 import os
 
-# Hardcoded Backend URL (Tribal Knowledge: Service-to-Service wiring)
-BACKEND_URL = "https://diamondmind-backend-yalf.onrender.com"
+# 1. Parameterized URL with Env Var override
+# Default falls back to 'yalf' if not set in Render Dashboard
+DEFAULT_BACKEND = "https://diamondmind-backend-yalf.onrender.com"
+BACKEND_URL = os.environ.get("BACKEND_URL", DEFAULT_BACKEND)
 
 class PoseExtractor:
     def __init__(self, static_image_mode=False, model_complexity=1, min_detection_confidence=0.5):
@@ -42,6 +44,7 @@ class PoseExtractor:
 
         print(f"🎬 Starting processing: {video_path} (Job: {job_id})")
         print(f"📹 Video info: {total_frames} frames, {fps} fps")
+        print(f"📡 Reporting progress to: {BACKEND_URL}")
 
         while cap.isOpened():
             success, frame = cap.read()

@@ -1,17 +1,27 @@
 {
-  "key": "DM-40",
-  "summary": "Feature: Export and Download Video with Skeleton Overlay",
-  "issuetype": { "name": "Story" },
-  "priority": { "name": "High" },
-  "labels": ["Feature", "Media", "Sharing"],
+  "summary": "Optimization: Centralize and Parameterize API URLs",
+  "issuetype": {
+    "name": "Story"
+  },
+  "priority": {
+    "name": "High"
+  },
+  "labels": [
+    "Refactor",
+    "Configuration"
+  ],
   "details": {
-    "user_story": "As a User, I want to download the analyzed video with the green skeleton overlay burned in so that I can share it with my coach or post it to social media.",
-    "context": "The overlay is currently rendered in real-time as an SVG. Exporting requires merging the video stream with the SVG coordinate layer into a single file.",
+    "user_story": "As a Developer, I want to centralize API URLs in a config file (Mobile) and Environment Variables (AI Service) so that I don't have to hunt down hardcoded strings when the backend URL changes.",
+    "context": "We recently experienced a regression where App.js pointed to an old backend (vg35) while UploadService pointed to the new one (yalf).",
     "acceptance_criteria": [
-      "Add a 'Download Analysis' button to the results card and fullscreen view.",
-      "Merge VideoView content with SkeletonOverlay into a new MP4.",
-      "Save the resulting file to the device's Media Library or Files app.",
-      "Provide a native Share Sheet after successful export."
+      "Mobile App reads API_URL and WS_URL from a single src/config.js file.",
+      "AI Service reads BACKEND_URL from os.environ, with a fallback default.",
+      "System functions identically to before (upload, overlay, progress bar)."
+    ],
+    "technical_details": [
+      "Create diamondmind-mobile/src/config.js",
+      "Refactor UploadService.js and App.js to import from config.js",
+      "Update pose_engine.py to use os.environ.get('BACKEND_URL')"
     ]
   }
 }
