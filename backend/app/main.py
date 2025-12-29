@@ -60,7 +60,7 @@ async def stream_file(file: UploadFile):
 async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
     """
     Gateway endpoint: Streams video directly to AI Service.
-    Uses generator to avoid RAM spikes on Render Free Tier.
+    Uses file.file to bypass RAM limits without breaking httpx.
     """
     # 1. Validate file extension
     allowed_extensions = ["mp4", "mov", "avi"]
@@ -69,12 +69,13 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     try:
-        # 2. Prepare the streaming upload (NO reading into variable!)
-        # We manually construct the multipart stream
-        files = {"file": (file.filename, stream_file(file), file.content_type)}
+        # 2. Prepare the streaming upload
+        # FIX: We pass 'file.file' directly. This is the underlying SpooledTemporaryFile.
+        # httpx will read this in chunks automatically, avoiding the memory spike.
+        files = {"file": (file.filename, file.file, file.content_type)}
         
         # 3. Forward to AI Service with extended timeout
-        async with httpx.AsyncClient(timeout=300.0) as client: # Increased to 300s
+        async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{AI_SERVICE_URL}/analyze/pose", 
                 files=files,
@@ -82,7 +83,6 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
             )
         
         if response.status_code != 200:
-            # Handle the specific 'cap' error or others from AI Service
             try:
                 ai_data = response.json()
                 ai_error = ai_data.get("detail") or ai_data.get("error") or "Unknown AI Error"
