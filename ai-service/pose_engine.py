@@ -1,100 +1,82 @@
+import mediapipe
+print(f"Loading MediaPipe from: {mediapipe.__file__}")
 import cv2
 import mediapipe as mp
 import numpy as np
-import requests
+import json
+import os
 
-def analyze_video_pose(video_path: str, job_id: str = None):
-    """
-    Reads a video file, runs MediaPipe Pose 'Heavy', 
-    and returns a list of landmarks for every frame.
-    """
-    
-    # 1. Setup MediaPipe
-    BaseOptions = mp.tasks.BaseOptions
-    PoseLandmarker = mp.tasks.vision.PoseLandmarker
-    PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
-    VisionRunningMode = mp.tasks.vision.RunningMode
+class PoseExtractor:
+    # OPTIMIZATION: Default model_complexity set to 0 (Lite) for speed on Render Free Tier
+    def __init__(self, static_image_mode=False, model_complexity=0, min_detection_confidence=0.5):
+        """
+        Initialize the MediaPipe Pose model.
+        params:
+            static_image_mode: False for video (uses tracking to be faster/smoother)
+            model_complexity: 0 (Lite), 1 (Full), or 2 (Heavy). 
+                              0 is fastest and prevents timeouts on mobile clients.
+            min_detection_confidence: Threshold to consider a person detected
+        """
+        self.mp_pose = mp.solutions.pose
+        self.pose = self.mp_pose.Pose(
+            static_image_mode=static_image_mode,
+            model_complexity=model_complexity,
+            min_detection_confidence=min_detection_confidence,
+            min_tracking_confidence=0.5
+        )
 
-    model_path = 'pose_landmarker_heavy.task'
-    options = PoseLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=model_path),
-        running_mode=VisionRunningMode.VIDEO
-    )
+    def process_video(self, video_path):
+        """
+        Reads a video file and extracts skeletal landmarks for every frame.
+        Returns a list of dictionaries (one per frame).
+        """
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"Video file not found: {video_path}")
 
-    try:
-        landmarker = PoseLandmarker.create_from_options(options)
-    except Exception as e:
-        return {"error": f"Failed to load MediaPipe model: {e}"}
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = 0
+        output_data = []
 
-    # 2. Open the video inside the function
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return {"error": f"Could not open video file: {video_path}"}
+        print(f"🎬 Starting processing for: {video_path}...")
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_count = 0
-    results = []
+        while cap.isOpened():
+            success, frame = cap.read()
+            if not success:
+                break
 
-    # 3. Processing Loop
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+            # MediaPipe requires RGB input (OpenCV loads as BGR)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # --- THE AI MAGIC ---
+            # Process the image to detect pose
+            results = self.pose.process(frame_rgb)
 
-        # Convert the BGR image to RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            # Structure the data for this frame
+            frame_data = {
+                "frame_index": frame_count,
+                "timestamp_ms": cap.get(cv2.CAP_PROP_POS_MSEC),
+                "landmarks": {}
+            }
 
-        # Calculate timestamp in milliseconds
-        timestamp_ms = int((frame_count / fps) * 1000)
+            if results.pose_landmarks:
+                # Extract the 33 landmarks
+                # We normalize them to the list of named landmarks in MediaPipe
+                for idx, landmark in enumerate(results.pose_landmarks.landmark):
+                    landmark_name = self.mp_pose.PoseLandmark(idx).name
+                    frame_data["landmarks"][landmark_name] = {
+                        "x": landmark.x,
+                        "y": landmark.y,
+                        "z": landmark.z,
+                        "visibility": landmark.visibility
+                    }
+            else:
+                # Handle occlusion/missing data (as per ticket edge case)
+                frame_data["landmarks"] = None 
 
-        # Detect landmarks
-        detection_result = landmarker.detect_for_video(mp_image, timestamp_ms)
+            output_data.append(frame_data)
+            frame_count += 1
 
-        # Extract data
-        frame_data = {
-            "frame": frame_count,
-            "timestamp": timestamp_ms,
-            "landmarks": []
-        }
-
-        if detection_result.pose_landmarks:
-            # Get landmarks for the first detected person
-            for i, landmark in enumerate(detection_result.pose_landmarks[0]):
-                frame_data["landmarks"].append({
-                    "id": i,
-                    "x": landmark.x,
-                    "y": landmark.y,
-                    "z": landmark.z,
-                    "visibility": landmark.visibility
-                })
-        
-        results.append(frame_data)
-
-        # PROGRESS PULSE: Every 10 frames, notify the backend
-        if job_id and frame_count % 10 == 0:
-            progress = int((frame_count / total_frames) * 100)
-            try:
-                # We use a timeout so the AI isn't held up by a slow pulse
-                requests.post(
-                    f"https://diamondmind-vg35.onrender.com/api/jobs/{job_id}/progress",
-                    json={"progress": progress},
-                    timeout=0.5 
-                )
-            except Exception as e:
-                print(f"Pulse failed: {e}")
-
-        frame_count += 1
-
-    # 4. Cleanup
-    cap.release()
-    landmarker.close()
-
-    return {
-        "metadata": {
-            "total_frames": frame_count,
-            "fps": fps
-        },
-        "frames": results
-    }
+        cap.release()
+        print(f"✅ Processing complete. Extracted {len(output_data)} frames.")
+        return output_data
