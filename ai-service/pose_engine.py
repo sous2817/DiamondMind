@@ -69,6 +69,9 @@ class PoseExtractor:
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
+        output_filename = f"analyzed_{job_id}.mp4" if job_id else "analyzed_output.mp4"
+        output_path = os.path.join(output_dir, output_filename)
+
         cap = cv2.VideoCapture(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
         fps = cap.get(cv2.CAP_PROP_FPS) or 30

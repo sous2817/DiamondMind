@@ -1,8 +1,9 @@
 import os
 import shutil
 import uuid
+import tempfile  # 👈 Added
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse # 👈 Added
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pose_engine import PoseExtractor
 
@@ -15,11 +16,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Shared temp directory
-TEMP_DIR = "/tmp" 
-os.makedirs(TEMP_DIR, exist_ok=True)
+# ✅ FIX: Use the system's correct temp directory (works on Windows & Linux)
+TEMP_DIR = tempfile.gettempdir()
+print(f"📂 Using temporary directory: {TEMP_DIR}")
 
 print("🧠 Initializing AI Model...")
+# Ensure model_complexity matches what your machine can handle (0=Lite, 1=Full)
 ai_engine = PoseExtractor(model_complexity=0)
 print("✅ AI Model Ready.")
 
@@ -27,7 +29,6 @@ print("✅ AI Model Ready.")
 def health_check():
     return {"status": "healthy", "service": "DiamondMind AI"}
 
-# ✅ NEW: Serve the generated video file
 @app.get("/download/{filename}")
 def download_file(filename: str):
     file_path = os.path.join(TEMP_DIR, filename)
@@ -49,9 +50,10 @@ async def analyze(file: UploadFile = File(...), job_id: str = None):
             shutil.copyfileobj(file.file, buffer)
         
         print(f"▶️ Starting Analysis for Job: {job_id}")
-
-        # Engine now returns dict with "video_filename" key
-        pose_data = ai_engine.process_video(temp_path, job_id=job_id)
+        
+        # ⚠️ CRITICAL: Ensure pose_engine.py is also using tempfile.gettempdir()
+        # or passing the output path explicitly. Ideally, we pass the directory:
+        pose_data = ai_engine.process_video(temp_path, job_id=job_id, output_dir=TEMP_DIR)
         
         print(f"🏁 Analysis Complete. Output: {pose_data.get('video_filename')}")
 
@@ -59,10 +61,12 @@ async def analyze(file: UploadFile = File(...), job_id: str = None):
 
     except Exception as e:
         print(f"❌ Error processing video: {e}")
+        # Print the full traceback to the console so we can see the line number
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Only cleanup input file. Output file persists for download.
         if 'temp_path' in locals() and os.path.exists(temp_path):
             os.remove(temp_path)
             print(f"🧹 Cleaned up input: {temp_path}")

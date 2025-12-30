@@ -1,17 +1,18 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Config } from '../config.js';
 
-const API_URL = "https://diamondmind-backend-yalf.onrender.com"; 
+const API_URL = "https://diamondmind-backend-yalf.onrender.com";
 
 const UploadService = {
     uploadSwingVideo: async (fileUri, jobId, signal) => {
         const url = `${Config.API_BASE_URL}/api/videos/upload?job_id=${jobId}`;
-        
+
         try {
             const response = await FileSystem.uploadAsync(url, fileUri, {
                 fieldName: 'file',
                 httpMethod: 'POST',
-                uploadType: 1, // Multipart
+                uploadType: 1,
+                timeout: 120000,
             });
 
             if (response.status >= 200 && response.status < 300) {
