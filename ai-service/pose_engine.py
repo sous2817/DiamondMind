@@ -2,6 +2,7 @@ import mediapipe as mp
 import cv2
 import requests
 import os
+import numpy as np
 
 # 1. Parameterized URL with Env Var override
 # Default falls back to 'yalf' if not set in Render Dashboard
