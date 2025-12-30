@@ -5,7 +5,6 @@ import os
 import numpy as np
 
 # 1. Parameterized URL with Env Var override
-# Default falls back to 'yalf' if not set in Render Dashboard
 DEFAULT_BACKEND = "https://diamondmind-backend-yalf.onrender.com"
 BACKEND_URL = os.environ.get("BACKEND_URL", DEFAULT_BACKEND)
 
@@ -42,7 +41,7 @@ class PoseExtractor:
             pass
 
     def _draw_overlay(self, image, landmarks):
-        """Draws the skeleton overlay on the frame (ported from visualize.py)."""
+        """Draws the skeleton overlay on the frame."""
         annotated_image = np.copy(image)
         h, w, _ = annotated_image.shape
 
@@ -65,12 +64,14 @@ class PoseExtractor:
 
         return annotated_image
 
-    def process_video(self, video_path, job_id=None):
+    def process_video(self, video_path, job_id=None, output_dir=None):
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
-        output_filename = f"analyzed_{job_id}.mp4" if job_id else "analyzed_output.mp4"
-        output_path = os.path.join(output_dir, output_filename)
+        # Use system temp dir if no output_dir provided
+        if output_dir is None:
+            import tempfile
+            output_dir = tempfile.gettempdir()
 
         cap = cv2.VideoCapture(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
@@ -83,11 +84,10 @@ class PoseExtractor:
         valid_frames = 0
 
         # --- VIDEO WRITER SETUP ---
-        # We save to /tmp so it's ephemeral but accessible by the service
         output_filename = f"analyzed_{job_id}.mp4" if job_id else "analyzed_output.mp4"
-        output_path = os.path.join("/tmp", output_filename)
+        output_path = os.path.join(output_dir, output_filename)
         
-        # mp4v is widely supported for temp files; H.264 (avc1) might require extra libs
+        # mp4v is safe for Windows; if it fails, try 'avc1'
         fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
@@ -99,7 +99,7 @@ class PoseExtractor:
             if not success:
                 break
 
-            # Convert BGR to RGB for MediaPipe
+            # Convert BGR to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Process
@@ -121,14 +121,12 @@ class PoseExtractor:
                         "visibility": landmark.visibility
                     })
                 
-                # 2. Draw Overlay for Video (using the helper)
-                # Note: We draw on 'frame' (BGR) because OpenCV expects BGR for writing
+                # 2. Draw Overlay
                 final_frame = self._draw_overlay(frame, results.pose_landmarks)
             else:
-                # No skeleton detected? Just use original frame
                 final_frame = frame
 
-            # Write the frame to the output video
+            # Write frame to video
             out.write(final_frame)
 
             # Add to JSON list
@@ -156,5 +154,5 @@ class PoseExtractor:
             "total_frames": frame_count,
             "frames_with_person": valid_frames,
             "fps": fps,
-            "video_filename": output_filename # 👈 Client needs this to request download
+            "video_filename": output_filename
         }
