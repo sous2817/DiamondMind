@@ -1,6 +1,7 @@
 import httpx
 import os
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse # 👈 Added
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="DiamondMind Main Backend")
@@ -23,58 +24,53 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Endpoint for the AI Service to report progress
 @app.post("/api/jobs/{job_id}/progress")
 async def receive_progress(job_id: str, data: dict):
     await manager.send_progress(job_id, data["progress"])
     return {"status": "ok"}
 
-# WebSocket for the Mobile Phone to listen
 @app.websocket("/ws/progress/{job_id}")
 async def websocket_endpoint(websocket: WebSocket, job_id: str):
     await manager.connect(job_id, websocket)
     try:
         while True:
-            await websocket.receive_text() # Keep connection alive
+            await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(job_id)
 
-# 1. Update CORS to allow your Vercel Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Change to your Vercel URL later for security
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. Get the AI Service URL from Environment Variables
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8001")
 
-# --- HELPER: STREAMING GENERATOR ---
-async def stream_file(file: UploadFile):
-    """Yields file chunks to prevent loading entire video into memory."""
-    while chunk := await file.read(1024 * 1024):  # Read 1MB chunks
-        yield chunk
+# ✅ NEW: Proxy Endpoint for Downloads
+@app.get("/api/videos/download/{filename}")
+async def download_video(filename: str):
+    """Proxies the file download from AI Service to the Client."""
+    async def iterfile():
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream("GET", f"{AI_SERVICE_URL}/download/{filename}") as r:
+                if r.status_code != 200:
+                    raise HTTPException(status_code=r.status_code, detail="Could not retrieve video")
+                async for chunk in r.aiter_bytes():
+                    yield chunk
+
+    return StreamingResponse(iterfile(), media_type="video/mp4")
 
 @app.post("/api/videos/upload")
 async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
-    """
-    Gateway endpoint: Streams video directly to AI Service.
-    Uses file.file to bypass RAM limits without breaking httpx.
-    """
-    # 1. Validate file extension
     allowed_extensions = ["mp4", "mov", "avi"]
     ext = file.filename.split(".")[-1].lower()
     if ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     try:
-        # 2. Prepare the streaming upload
-        # FIX: We pass 'file.file' directly. This is the underlying SpooledTemporaryFile.
-        # httpx will read this in chunks automatically, avoiding the memory spike.
         files = {"file": (file.filename, file.file, file.content_type)}
         
-        # 3. Forward to AI Service with extended timeout
         async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{AI_SERVICE_URL}/analyze/pose", 
@@ -90,14 +86,19 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
                 ai_error = response.text
             raise HTTPException(status_code=response.status_code, detail=f"AI Service: {ai_error}")
 
-        return response.json()
+        # Append the public download URL to the response
+        result = response.json()
+        if "video_filename" in result:
+             # Construct the Proxy URL for the frontend
+             # Note: In production, use your actual domain instead of relying on the request host if behind a proxy
+            result["download_url"] = f"/api/videos/download/{result['video_filename']}"
+
+        return result
 
     except httpx.ReadTimeout:
         raise HTTPException(status_code=504, detail="AI Processing Timed Out (Limit: 300s)")
-
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="AI Service is currently unreachable.")
-        
     except Exception as e:
         print(f"Upload Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")

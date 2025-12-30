@@ -1,35 +1,123 @@
 {
-  "summary": "UI/UX: Modernize Home Screen & Unify Error Handling",
-  "issuetype": {
-    "name": "Story"
+  "defaults": {
+    "issuetype": { "name": "Story" },
+    "project": "DM",
+    "labels": ["AI-Roadmap", "RAG", "GenAI"],
+    "priority": { "name": "Medium" }
   },
-  "priority": {
-    "name": "High"
-  },
-  "labels": [
-    "UI/UX",
-    "Frontend",
-    "Mobile"
-  ],
-  "details": {
-    "user_story": "As a User, I want a professional, modern interface that clearly communicates status without redundant error messages, so that I feel confident using the tool.",
-    "context": "Current UI is raw/MVP. Error messages appear in two places (top and bottom) due to overlapping logic. The styling lacks the 'Sports Tech' aesthetic.",
-    "acceptance_criteria": [
-      "Remove the top 'Timeout' icon and text container completely.",
-      "Refine the bottom error toast to look like a modern UI notification (rounded, better font).",
-      "Style the 'Select Swing' area as a modern Card with shadow and distinct button.",
-      "Update typography to use system weights (Bold Headers) for better hierarchy.",
-      "Ensure 'Cold Start' timeouts still trigger the bottom notification."
-    ],
-    "technical_details": [
-      "Modify 'App.js' (or main screen component).",
-      "Consolidate state variables for error handling (remove redundant state).",
-      "Use React Native 'StyleSheet' for shadows and rounded corners.",
-      "Keep existing 'UploadService.js' integration intact."
-    ],
-    "edge_cases": [
-      "Ensure the new Error Toast floats above other UI elements (z-index).",
-      "Ensure the UI remains responsive on smaller screens (iPhone SE size)."
-    ]
-  }
+  "stories": [
+    {
+      "summary": "Integrate Vector Database for Swing Persistence",
+      "priority": { "name": "High" },
+      "details": {
+        "user_story": "As a Developer, I want to store swing analysis data (pose landmarks) in a Vector Database (Pinecone or Weaviate) so that I can perform semantic searches and retrieval later.",
+        "context": "Currently, swing data is ephemeral. To enable RAG and comparison features, we need persistent storage optimized for similarity search. This serves as the foundational infrastructure for the upcoming GenAI features.",
+        "acceptance_criteria": [
+          "Provision a Vector Database instance (Pinecone or Weaviate) accessible by the Backend and AI Service.",
+          "Define a schema/index for storing flattened pose landmark arrays (33 landmarks * 4 attributes) as embeddings.",
+          "Update `ai-service` to upsert processed swing data to the Vector DB after successful MediaPipe extraction.",
+          "Ensure metadata (User ID, Video ID, Timestamp) is stored alongside the vectors."
+        ],
+        "technical_details": [
+          "Install python client for chosen DB in `backend` and `ai-service`.",
+          "Create a new service module `vector_store.py` to handle connection strings (managed via Env Vars).",
+          "Landmarks (x, y, z, visibility) might need normalization before vectorization."
+        ],
+        "edge_cases": [
+          "Handling network timeouts when upserting large batches of historical swings.",
+          "Ensuring vector dimensions match the embedding model limits."
+        ]
+      }
+    },
+    {
+      "summary": "Implement RAG Pipeline for Natural Language Swing Analysis",
+      "priority": { "name": "High" },
+      "details": {
+        "user_story": "As a Coach, I want the system to generate analysis in natural language based on established baseball coaching knowledge, so that the feedback feels professional and authoritative.",
+        "context": "Instead of just returning raw coordinates, we want the system to explain *what* is wrong using RAG. The system should retrieve relevant coaching tips based on detected flaws (e.g., 'casting', 'early extension').",
+        "acceptance_criteria": [
+          "Ingest a baseline dataset of baseball coaching manuals/text into the Vector DB.",
+          "Create a retrieval chain in the Backend that queries the DB based on specific pose error signatures.",
+          "Integrate an LLM (e.g., OpenAI/Anthropic) to synthesize the retrieved context into a cohesive critique.",
+          "Return a string of natural language text alongside the existing JSON pose data."
+        ],
+        "technical_details": [
+          "Use LangChain or basic OpenAI API calls in `backend`.",
+          "Requires a new Env Var for LLM API Keys.",
+          "The 'query' to the RAG system will be constructed from the specific deviations found in the MediaPipe landmarks."
+        ],
+        "edge_cases": [
+          "Hallucinations where the LLM invents coaching terms.",
+          "RAG retrieving irrelevant advice if the swing flaw is ambiguous."
+        ]
+      }
+    },
+    {
+      "summary": "Implement Semantic Search for Similar Swing Retrieval",
+      "priority": { "name": "Medium" },
+      "details": {
+        "user_story": "As a User, I want to see 'Pro Comps' or past swings that look similar to my current swing, so that I can visually compare my form.",
+        "context": "Using the Vector DB established in the previous story, we will query for 'nearest neighbors' to the user's current swing vector to find similar examples.",
+        "acceptance_criteria": [
+          "Create a backend endpoint `/api/swings/search` that accepts a swing ID.",
+          "Implement vector similarity search (Cosine Similarity) to find the top 3 closest matches.",
+          "Return the video URLs and IDs of the matching swings.",
+          "Filter results to ensure diverse comparisons (e.g., matching against a Pro dataset vs. User's history)."
+        ],
+        "technical_details": [
+          "The search logic resides in the Backend.",
+          "It requests the vector for the target swing from the DB, then runs the similarity query.",
+          "Requires a pre-populated 'Pro Swing' dataset in the DB for effective day-one usage."
+        ],
+        "edge_cases": [
+          "No similar swings found (threshold too strict).",
+          "Finding the user's *own* duplicate uploads as the top match (need to filter out current ID)."
+        ]
+      }
+    },
+    {
+      "summary": "Generate LLM Summaries for Swing Comparisons",
+      "priority": { "name": "Medium" },
+      "details": {
+        "user_story": "As a User, I want a text summary explaining *why* my swing was matched with a specific Pro player, so I understand the similarity.",
+        "context": "Semantic search gives us the video, but this story provides the 'Why'. The LLM will compare the data points of the user's swing vs. the retrieved result.",
+        "acceptance_criteria": [
+          "Pass the user's swing metrics and the retrieved 'Pro Comp' metrics to the LLM.",
+          "Engineer a prompt to ask for a 'Compare and Contrast' summary (e.g., 'Both you and Judge have a high hand set, but you drift forward earlier').",
+          "Return this summary field in the API response."
+        ],
+        "technical_details": [
+          "This extends the RAG pipeline.",
+          "It requires structured context injection (formatting both sets of landmarks into a token-efficient text representation for the LLM)."
+        ],
+        "edge_cases": [
+          "Token limit errors if trying to pass raw data for every frame.",
+          "Need to summarize the swing into keyframes (stance, load, contact, follow-through) before sending to LLM."
+        ]
+      }
+    },
+    {
+      "summary": "Develop AI Coaching Chatbot Interface",
+      "priority": { "name": "Medium" },
+      "details": {
+        "user_story": "As a User, I want to ask follow-up questions to an AI Coach about my analysis via a chat interface in the app.",
+        "context": "Users may not understand the static analysis. A chatbot allows them to ask 'How do I fix this?' or 'What drill should I do?'.",
+        "acceptance_criteria": [
+          "Create a new `ChatOverlay` or screen in the Mobile App.",
+          "Implement a chat input that sends user text + current `job_id` context to the backend.",
+          "Backend maintains a short-term conversation history buffer.",
+          "Display streaming responses from the AI Coach."
+        ],
+        "technical_details": [
+          "Frontend: React Native Gifted Chat or custom UI.",
+          "Backend: New WebSocket endpoint or HTTP POST for chat messages.",
+          "The backend must inject the current swing's RAG context into the system prompt so the chatbot 'knows' what video is being discussed."
+        ],
+        "edge_cases": [
+          "User asks about non-baseball topics (guardrails needed).",
+          "Network disconnects during streaming response."
+        ]
+      }
+    }
+  ]
 }
