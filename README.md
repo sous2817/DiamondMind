@@ -2,7 +2,7 @@ DiamondMind ⚾️
 
 AI-Driven Baseball Swing Analysis (Mobile & Cloud)
 
-Moneyball in your pocket. My specialized computer vision pipeline that extracts skeletal biomechanics from simple smartphone video.
+My specialized computer vision pipeline that extracts skeletal biomechanics from simple smartphone video.
 
 🏗 The Architecture ("How I survive the Free Tier")
 
@@ -61,7 +61,6 @@ Run Mobile:
 cd diamondmind-mobile
 npx expo start
 
-
 Wake the Servers:
 
 Since I'm on the Free Tier, services sleep after 15 mins.
@@ -78,12 +77,12 @@ AI: MediaPipe Pose Landmarker, OpenCV (Headless).
 
 Infra: Docker, Render.com.
 
-🛑 Troubleshooting 
+🛑 Troubleshooting
 
-"Timeout Error": The server is cold. I go wake it up and wait 60 seconds.
+"Timeout Error": The server is cold. Wake it up and wait 60 seconds.
 
-"Skeleton not showing": I check the console. If frames_with_person is 0, the lighting was bad or the AI returned a Dictionary instead of an Array.
+"Skeleton not showing": Check the console. If frames_with_person is 0, the lighting was bad or the AI returned a Dictionary instead of an Array.
 
-"Black Bar at Bottom": That's the Expo LogBox. I suppressed it in Prod, but if it pops up, I check my console.error logs.
+"Black Bar at Bottom": That's the Expo LogBox. I suppressed it in Prod, but if it pops up, check the console.error logs.
 
-Maintained by the Engineer. Always check DiamondMind_Master_Context.md before starting a new ticket.
+Maintained by the Engineer/Product Owner (me). Always check DiamondMind_Master_Context.md before starting a new ticket.

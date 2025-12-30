@@ -4,17 +4,21 @@ import json
 import sys
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 # --- CONFIGURATION ---
 JIRA_URL = os.getenv("JIRA_URL")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL")
 JIRA_TOKEN = os.getenv("JIRA_API_TOKEN")
-PROJECT_KEY = os.getenv("PROJECT_KEY")  # Now loaded from .env
-STORIES_FILE = "c:\\dm\\backend\\scripts\\stories.json"
+PROJECT_KEY = os.getenv("PROJECT_KEY")
+
+# ✅ FIX: Use relative path (works on any machine)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STORIES_FILE = os.path.join(BASE_DIR, "stories.json")
 
 # Validate critical env vars
-if not JIRA_URL or not JIRA_EMAIL or not JIRA_TOKEN or not PROJECT_KEY:
+if not all([JIRA_URL, JIRA_EMAIL, JIRA_TOKEN, PROJECT_KEY]):
     print("❌ Error: Missing JIRA credentials or PROJECT_KEY in .env file")
     sys.exit(1)
 
@@ -27,32 +31,24 @@ def format_description(details):
     """
     desc = ""
 
-    # User Story Panel
     if "user_story" in details:
-        desc += "{panel:title=User Story|bgColor=#EAE6FF}\n"
-        desc += details["user_story"] + "\n"
-        desc += "{panel}\n\n"
+        desc += "{panel:title=User Story|bgColor=#EAE6FF}\n" + details["user_story"] + "\n{panel}\n\n"
 
-    # Context
     if "context" in details:
-        desc += "h3. 🧠 Context & Goal\n"
-        desc += details["context"] + "\n\n"
+        desc += "h3. 🧠 Context & Goal\n" + details["context"] + "\n\n"
 
-    # Acceptance Criteria
     if "acceptance_criteria" in details:
         desc += "h3. ✅ Acceptance Criteria (Definition of Done)\n"
         for item in details["acceptance_criteria"]:
             desc += f"* {item}\n"
         desc += "\n"
 
-    # Technical Implementation
     if "technical_details" in details:
         desc += "h3. ⚙️ Technical Implementation Details\n"
         for item in details["technical_details"]:
             desc += f"* {item}\n"
         desc += "\n"
 
-    # Edge Cases
     if "edge_cases" in details:
         desc += "h3. ⚠️ Edge Cases & Constraints\n"
         for item in details["edge_cases"]:
@@ -61,67 +57,97 @@ def format_description(details):
 
     return desc
 
+def check_if_exists(jira, summary):
+    """
+    ✅ IDEMPOTENCY CHECK: Returns existing issue key if found, else None.
+    """
+    # Escape quotes for JQL
+    safe_summary = summary.replace('"', '\\"')
+    jql = f'project = "{PROJECT_KEY}" AND summary ~ "{safe_summary}"'
+    
+    results = jira.search_issues(jql)
+    
+    # Double-check exact string match to avoid fuzzy false positives
+    for issue in results:
+        if issue.fields.summary == summary:
+            return issue
+    return None
+
 def create_backlog():
-    # 1. Check if file exists
     if not os.path.exists(STORIES_FILE):
         print(f"❌ Error: Could not find {STORIES_FILE}")
         return
 
-    # 2. Load data from JSON
     try:
         with open(STORIES_FILE, "r") as f:
-            stories = json.load(f)
+            data = json.load(f)
     except json.JSONDecodeError as e:
         print(f"❌ Error parsing JSON: {e}")
         return
 
-    # Wrap single object in list if necessary
-    if isinstance(stories, dict):
-        stories = [stories]
+    # Handle new structure vs legacy list
+    if isinstance(data, list):
+        stories = data
+        defaults = {}
+    else:
+        stories = data.get("stories", [])
+        defaults = data.get("defaults", {})
 
     jira = get_jira_client()
     print(f"🚀 Connecting to JIRA Project: {PROJECT_KEY}...")
-    print(f"📂 Found {len(stories)} stories in {STORIES_FILE}")
+    print(f"📂 Found {len(stories)} stories to process.")
 
-    # 3. Process Tickets
     for story_data in stories:
-        # Prepare the fields dictionary
+        # Merge defaults with specific story data
+        summary = story_data.get("summary")
+        if not summary:
+            print("❌ Skipping invalid story: Missing 'summary'")
+            continue
+
+        issuetype = story_data.get("issuetype", defaults.get("issuetype", {"name": "Story"}))
+        priority = story_data.get("priority", defaults.get("priority", {"name": "Medium"}))
+        
+        # Merge labels (unique values)
+        default_labels = defaults.get("labels", [])
+        story_labels = story_data.get("labels", [])
+        combined_labels = list(set(default_labels + story_labels))
+
         fields = {
-            "summary": story_data.get("summary"),
-            "issuetype": story_data.get("issuetype", {"name": "Story"}),
-            "labels": story_data.get("labels", []),
+            "project": {"key": PROJECT_KEY},
+            "summary": summary,
+            "issuetype": issuetype,
+            "priority": priority,
+            "labels": combined_labels,
             "description": story_data.get("description", "")
         }
 
-        # Format description if detailed structure is used
         if "details" in story_data:
             fields["description"] = format_description(story_data["details"])
-            
-        # Add priority if present
-        if "priority" in story_data:
-             fields["priority"] = story_data["priority"]
 
-        # --- UPDATE vs CREATE LOGIC ---
+        # --- EXECUTION ---
         
-        # 1. Check if a specific KEY is provided (e.g., "DM-12")
+        # 1. Update existing by Key
         if "key" in story_data:
             issue_key = story_data["key"]
-            print(f"🔄 Updating existing ticket: {issue_key}...")
+            print(f"🔄 Updating explicitly defined ticket: {issue_key}...")
             try:
-                issue = jira.issue(issue_key)
-                issue.update(fields=fields)
-                print(f"✅ Successfully updated {issue_key}")
+                jira.issue(issue_key).update(fields=fields)
+                print(f"✅ Updated {issue_key}")
             except Exception as e:
-                print(f"❌ Failed to update {issue_key}: {e}")
-
-        # 2. If no key, CREATE a new one
+                print(f"❌ Failed update {issue_key}: {e}")
+        
+        # 2. Idempotency Check (Prevent Duplicates)
         else:
-            fields["project"] = {"key": PROJECT_KEY}
-            try:
-                new_issue = jira.create_issue(fields=fields)
-                print(f"✨ Created New Ticket: {new_issue.key}")
-            except Exception as e:
-                print(f"❌ Failed to create {fields['summary']}: {e}")
+            existing_issue = check_if_exists(jira, summary)
+            if existing_issue:
+                print(f"⚠️  Skipping: '{summary}' already exists as {existing_issue.key}")
+            else:
+                # 3. Create New
+                try:
+                    new_issue = jira.create_issue(fields=fields)
+                    print(f"✨ Created New Ticket: {new_issue.key}")
+                except Exception as e:
+                    print(f"❌ Failed to create '{summary}': {e}")
 
 def transition_ticket(ticket_id, target_status="Done"):
     jira = get_jira_client()
