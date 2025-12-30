@@ -28,12 +28,12 @@ const styles = StyleSheet.create({
   headerContainer: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 30 },
   badge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 12 },
   badgeText: { color: THEME.accent, fontSize: 12, fontWeight: '700', marginLeft: 6 },
- title: { 
-  fontSize: 34, 
-  fontWeight: 'bold', // '800' often fails on Android stock fonts
-  color: THEME.primary, 
-  letterSpacing: 0.5 
-},
+  title: {
+    fontSize: 34,
+    fontWeight: 'bold', // '800' often fails on Android stock fonts
+    color: THEME.primary,
+    letterSpacing: 0.5
+  },
   subtitle: { fontSize: 17, color: THEME.subtext, marginTop: 4, fontWeight: '500' },
 
   // Upload Card
@@ -171,17 +171,31 @@ export default function App() {
     abortControllerRef.current = new AbortController();
     const jobId = Math.random().toString(36).substring(7);
 
+    // ✅ LOG: Connection Attempt (Section 14)
+    console.log(`📡 WebSocket connecting to job: ${jobId}`);
+
     // Use centralized config
     const ws = new WebSocket(`${Config.WS_BASE_URL}/ws/progress/${jobId}`);
 
+    // ✅ LOG: Connection Success (Section 14)
+    ws.onopen = () => {
+      console.log("✅ WebSocket connected");
+    };
+
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
-      if (data.progress) setProgress(data.progress);
+      if (data.progress) {
+        // ✅ LOG: Progress Update (Section 14)
+        console.log(`📊 Progress update: ${data.progress}%`);
+        setProgress(data.progress);
+      }
     };
 
     try {
+      // Note: "Starting upload..." log is handled inside UploadService.js
       const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
       if (data) setResult(data);
+      // Note: "Analysis complete..." log is handled inside UploadService.js
     } catch (err) {
       console.error("❌ UPLOAD FAILED:", err);
       if (err.message !== 'canceled') {
