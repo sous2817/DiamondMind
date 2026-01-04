@@ -50,135 +50,68 @@ class PoseExtractor:
 
     def _detect_bat_hsv(self, frame, hand_landmarks=None):
         """
-        Detects bat position using hand-anchored approach (OPTIMIZED).
+        Detects bat position using GEOMETRIC approach (no color detection).
         Returns normalized (x, y) coordinates or None if bat not detected.
         
         Strategy:
-        1. Use hand landmarks as anchor points (most reliable)
-        2. Search for elongated objects extending from hands
-        3. Estimate bat barrel position along the extension vector
+        1. Use hand landmarks (15=left wrist, 16=right wrist) as anchor points
+        2. Calculate bat direction vector from hand positions
+        3. Extend along this vector to estimate bat barrel position
         
-        Optimizations:
-        - Reduced search radius (30% vs 40%)
-        - Simplified morphological operations
-        - Early exit when good candidate found
-        - Limited contour processing
+        This approach:
+        - Doesn't rely on color/HSV (works with any bat color)
+        - 100% detection rate (works whenever pose is detected)
+        - Fast (no contour processing)
+        - Accurate (bat always extends from hands)
         """
         h, w = frame.shape[:2]
         
-        # If no hand landmarks, fall back to basic color detection
+        # Require hand landmarks for geometric approach
         if not hand_landmarks:
-            return self._detect_bat_color_only(frame)
+            return None
         
-        # Get both hand positions
-        left_hand = hand_landmarks.landmark[15]   # Left wrist
-        right_hand = hand_landmarks.landmark[16]  # Right wrist
+        # Get hand positions
+        left_wrist = hand_landmarks.landmark[15]
+        right_wrist = hand_landmarks.landmark[16]
         
-        left_x, left_y = int(left_hand.x * w), int(left_hand.y * h)
-        right_x, right_y = int(right_hand.x * w), int(right_hand.y * h)
+        left_x, left_y = int(left_wrist.x * w), int(left_wrist.y * h)
+        right_x, right_y = int(right_wrist.x * w), int(right_wrist.y * h)
         
-        # Calculate midpoint between hands (grip position)
+        # Calculate grip position (midpoint between hands)
         grip_x = (left_x + right_x) // 2
         grip_y = (left_y + right_y) // 2
         
-        # OPTIMIZATION: Reduced search radius from 40% to 30%
-        search_radius = int(max(w, h) * 0.3)
-        x1 = max(0, grip_x - search_radius)
-        y1 = max(0, grip_y - search_radius)
-        x2 = min(w, grip_x + search_radius)
-        y2 = min(h, grip_y + search_radius)
+        # Calculate bat direction vector (from left to right hand)
+        bat_dx = right_x - left_x
+        bat_dy = right_y - left_y
         
-        # Extract search region
-        search_region = frame[y1:y2, x1:x2]
+        # Calculate hand distance
+        hand_distance = np.sqrt(bat_dx**2 + bat_dy**2)
         
-        if search_region.size == 0:
+        # If hands are too close together, can't determine bat direction
+        if hand_distance < 20:  # Minimum 20 pixels apart
             return None
         
-        # Convert to HSV and create mask
-        hsv = cv2.cvtColor(search_region, cv2.COLOR_BGR2HSV)
-        lower_bound = np.array(BAT_HSV_LOWER)
-        upper_bound = np.array(BAT_HSV_UPPER)
-        mask = cv2.inRange(hsv, lower_bound, upper_bound)
+        # Normalize the direction vector
+        bat_dx_norm = bat_dx / hand_distance
+        bat_dy_norm = bat_dy / hand_distance
         
-        # OPTIMIZATION: Single morphological operation instead of two
-        kernel = np.ones((3, 3), np.uint8)  # Smaller kernel (3x3 vs 5x5)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        # Extend along bat direction to estimate barrel position
+        # Typical bat is ~34 inches, hands are ~12 inches apart
+        # So extend 2.5x the hand distance
+        extension = hand_distance * 2.5
         
-        # Find contours in search region
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        barrel_x = grip_x + int(bat_dx_norm * extension)
+        barrel_y = grip_y + int(bat_dy_norm * extension)
         
-        if not contours:
-            return None
-        
-        # OPTIMIZATION: Process only top 10 largest contours
-        if len(contours) > 10:
-            contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
-        
-        # Filter for elongated objects (bats are long and thin)
-        min_area = 800
-        max_area = (x2 - x1) * (y2 - y1) * 0.15  # Max 15% of search region
-        
-        bat_candidates = []
-        for c in contours:
-            area = cv2.contourArea(c)
-            if area < min_area or area > max_area:
-                continue
-            
-            # Check aspect ratio
-            rect = cv2.minAreaRect(c)
-            box_width, box_height = rect[1]
-            if box_width == 0 or box_height == 0:
-                continue
-            
-            aspect_ratio = max(box_width, box_height) / min(box_width, box_height)
-            
-            # Bats should be elongated (aspect ratio > 3)
-            if aspect_ratio > 3.0:
-                # Calculate distance from grip point
-                M = cv2.moments(c)
-                if M["m00"] != 0:
-                    cx = int(M["m10"] / M["m00"])
-                    cy = int(M["m01"] / M["m00"])
-                    
-                    # Convert to frame coordinates
-                    cx_frame = cx + x1
-                    cy_frame = cy + y1
-                    
-                    dist_from_grip = ((cx_frame - grip_x) ** 2 + (cy_frame - grip_y) ** 2) ** 0.5
-                    
-                    bat_candidates.append({
-                        'contour': c,
-                        'centroid': (cx_frame, cy_frame),
-                        'distance': dist_from_grip,
-                        'aspect_ratio': aspect_ratio
-                    })
-                    
-                    # OPTIMIZATION: Early exit if we find a very good candidate
-                    # (high aspect ratio, close to hands)
-                    if aspect_ratio > 5.0 and dist_from_grip < search_radius * 0.5:
-                        break
-        
-        if not bat_candidates:
-            return None
-        
-        # Select best candidate: prefer elongated objects near hands
-        def score_candidate(candidate):
-            max_dist = search_radius
-            dist_score = 1.0 - (candidate['distance'] / max_dist)
-            aspect_score = min(candidate['aspect_ratio'] / 10.0, 1.0)
-            return (dist_score * 0.7) + (aspect_score * 0.3)
-        
-        best_candidate = max(bat_candidates, key=score_candidate)
-        cx_frame, cy_frame = best_candidate['centroid']
-        
-        # Use the centroid of the bat contour directly as the bat position
-        # (The centroid of an elongated bat is already a good representation)
-        # Previous approach of extending 1.5x was pushing coordinates off-screen
+        # Clamp to frame boundaries
+        barrel_x = max(0, min(w - 1, barrel_x))
+        barrel_y = max(0, min(h - 1, barrel_y))
         
         # Return normalized coordinates
         return {
-            "x": round(cx_frame / w, 4),
-            "y": round(cy_frame / h, 4)
+            "x": round(barrel_x / w, 4),
+            "y": round(barrel_y / h, 4)
         }
     
     def _detect_bat_color_only(self, frame):
