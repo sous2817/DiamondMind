@@ -50,13 +50,19 @@ class PoseExtractor:
 
     def _detect_bat_hsv(self, frame, hand_landmarks=None):
         """
-        Detects bat position using hand-anchored approach.
+        Detects bat position using hand-anchored approach (OPTIMIZED).
         Returns normalized (x, y) coordinates or None if bat not detected.
         
         Strategy:
         1. Use hand landmarks as anchor points (most reliable)
         2. Search for elongated objects extending from hands
         3. Estimate bat barrel position along the extension vector
+        
+        Optimizations:
+        - Reduced search radius (30% vs 40%)
+        - Simplified morphological operations
+        - Early exit when good candidate found
+        - Limited contour processing
         """
         h, w = frame.shape[:2]
         
@@ -75,8 +81,8 @@ class PoseExtractor:
         grip_x = (left_x + right_x) // 2
         grip_y = (left_y + right_y) // 2
         
-        # Create search region around hands (expanded area)
-        search_radius = int(max(w, h) * 0.4)  # 40% of frame dimension
+        # OPTIMIZATION: Reduced search radius from 40% to 30%
+        search_radius = int(max(w, h) * 0.3)
         x1 = max(0, grip_x - search_radius)
         y1 = max(0, grip_y - search_radius)
         x2 = min(w, grip_x + search_radius)
@@ -94,16 +100,19 @@ class PoseExtractor:
         upper_bound = np.array(BAT_HSV_UPPER)
         mask = cv2.inRange(hsv, lower_bound, upper_bound)
         
-        # Apply morphological operations
-        kernel = np.ones((5, 5), np.uint8)
+        # OPTIMIZATION: Single morphological operation instead of two
+        kernel = np.ones((3, 3), np.uint8)  # Smaller kernel (3x3 vs 5x5)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         
         # Find contours in search region
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         if not contours:
             return None
+        
+        # OPTIMIZATION: Process only top 10 largest contours
+        if len(contours) > 10:
+            contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
         
         # Filter for elongated objects (bats are long and thin)
         min_area = 800
@@ -143,28 +152,26 @@ class PoseExtractor:
                         'distance': dist_from_grip,
                         'aspect_ratio': aspect_ratio
                     })
+                    
+                    # OPTIMIZATION: Early exit if we find a very good candidate
+                    # (high aspect ratio, close to hands)
+                    if aspect_ratio > 5.0 and dist_from_grip < search_radius * 0.5:
+                        break
         
         if not bat_candidates:
             return None
         
         # Select best candidate: prefer elongated objects near hands
-        # Weight: closer to hands = better, higher aspect ratio = better
         def score_candidate(candidate):
-            # Normalize distance (closer = higher score)
             max_dist = search_radius
             dist_score = 1.0 - (candidate['distance'] / max_dist)
-            
-            # Normalize aspect ratio (more elongated = higher score)
             aspect_score = min(candidate['aspect_ratio'] / 10.0, 1.0)
-            
-            # Combined score (distance weighted more heavily)
             return (dist_score * 0.7) + (aspect_score * 0.3)
         
         best_candidate = max(bat_candidates, key=score_candidate)
         cx_frame, cy_frame = best_candidate['centroid']
         
         # Estimate bat barrel position (extend from grip along bat direction)
-        # The centroid is roughly mid-bat, barrel is farther from hands
         dx = cx_frame - grip_x
         dy = cy_frame - grip_y
         
