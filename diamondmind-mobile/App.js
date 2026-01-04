@@ -127,6 +127,9 @@ export default function App() {
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [fullscreenDimensions, setFullscreenDimensions] = useState({ width: 0, height: 0 });
 
+  // ⚡️ PERFORMANCE: Track current frame index to avoid redundant state updates
+  const currentFrameIndexRef = useRef(-1);
+
   // ⚡️ FIX: Logic moved inside the hook to avoid race conditions
   const player = useVideoPlayer(videoUri, (p) => {
     p.loop = true;
@@ -143,15 +146,32 @@ export default function App() {
         // ⚡️ OPTIMIZATION: Use O(1) direct index access instead of O(N) .find()
         // This eliminates the "loop over all frames" jitter
         const frameIndex = Math.floor(payload.currentTime * result.fps);
-        const frame = result.frames[frameIndex];
 
-        if (frame) {
-          setCurrentFrameData(frame.landmarks);
+        // ⚡️ PERFORMANCE FIX: Only update state if frame actually changed
+        // This reduces state updates from 60/sec to video FPS (~30/sec)
+        if (frameIndex !== currentFrameIndexRef.current && frameIndex < result.frames.length) {
+          currentFrameIndexRef.current = frameIndex;
+          const frame = result.frames[frameIndex];
+
+          if (frame) {
+            setCurrentFrameData(frame.landmarks);
+          }
         }
       }
     });
     return () => sub.remove();
   }, [player, videoUri, result]);
+
+  // ✅ ALIGNMENT FIX: Update video dimensions from player source
+  // This ensures we use the EXACT dimensions MediaPipe analyzed
+  useEffect(() => {
+    if (player?.src?.width && player?.src?.height) {
+      setVideoDimensions({
+        width: player.src.width,
+        height: player.src.height
+      });
+    }
+  }, [player]);
 
   const handleUpload = async (uri) => {
     setLoading(true);
@@ -250,6 +270,7 @@ export default function App() {
     setResult(null);
     setError(null);
 
+    // Set initial dimensions from asset (will be updated by player when loaded)
     setVideoDimensions({ width: asset.width, height: asset.height });
     setSelectedFile(asset.fileName || "swing.mp4");
 
@@ -266,6 +287,7 @@ export default function App() {
     setCurrentFrameData(null);
     setIsFullscreen(false);
     setError(null);
+    currentFrameIndexRef.current = -1; // Reset frame tracking
   };
 
   const videoRatio = player.src?.width ? player.src.width / player.src.height : 1.77;

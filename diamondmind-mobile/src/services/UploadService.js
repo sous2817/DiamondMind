@@ -19,8 +19,8 @@ const UploadService = {
             if (response.status >= 200 && response.status < 300) {
                 const result = JSON.parse(response.body);
 
-                // ✅ RESTORED: Terminal notification for success (matches Sec 14)
-                console.log(`✅ Analysis complete: { totalFrames: ${result.total_frames}, framesWithPerson: ${result.frames_with_person} }`);
+                // ✅ Async pattern: HTTP response confirms upload accepted, result comes via WebSocket
+                console.log(`✅ Upload accepted: ${result.status} - Job ${result.job_id}`);
 
                 return result;
             } else {

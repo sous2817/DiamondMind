@@ -32,11 +32,10 @@
 
 ### 🔄 Code Sync Rule
 
-> **I (The AI) start this session with zero knowledge of your local file contents.**
+> **I (The AI) have read access to your workspace and will inspect files before modification.**
 
-#### The "First Touch" Rule
-
-Before modifying a file for the first time in this session, I **MUST** ask you to paste its current content.
+#### The "First Inspection" Rule
+Before modifying a file for the first time in this session, I **MUST** use `view_file` to see its current state and confirm my understanding aligns with the latest code.
 
 #### State Retention
 
@@ -87,7 +86,7 @@ At the end of every JIRA Story or major bug fix, run this prompt:
 
 ### 🏗️ System Architecture
 
-We split the backend to prevent memory crashes on the Free Tier and to isolate heavy dependencies.
+We split the backend to reduce memory pressure and isolate expensive MediaPipe inference
 
 | Service               | Role           | Tech Stack                       | Location                |
 | --------------------- | -------------- | -------------------------------- | ----------------------- |
@@ -399,10 +398,11 @@ Follow these exact specifications if redeploying to Render.
 - `PYTHON_VERSION = 3.11.0` (or 3.12 if upgraded)
 - `AI_SERVICE_URL = https://dm-ai-service.onrender.com`
 
-**Dependencies:** `requirements.txt` MUST include:
+**Dependencies:** `requirements.txt` includes:
 
-- `opencv-python-headless` (to avoid libGL crashes)
-- `httpx`
+- `httpx` - For streaming requests to AI service
+- `fastapi` - Web framework
+- `python-multipart` - For file uploads
 
 ---
 
@@ -441,7 +441,7 @@ docker run -p 8001:8001 -e BACKEND_URL=http://host.docker.internal:8000 dm-ai
 
 ```bash
 cd backend
-$env:AI_SERVICE_URL="http://localhost:8000"
+$env:AI_SERVICE_URL="http://localhost:8001"
 uvicorn app.main:app --reload --port 8000
 ```
 

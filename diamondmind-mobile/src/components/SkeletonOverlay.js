@@ -64,10 +64,10 @@ const SkeletonOverlay = ({ landmarks, videoWidth, videoHeight, containerWidth, c
 
                 {landmarks.map((lm, index) => {
                     if (!lm || lm.visibility < 0.5) return null;
-                    
+
                     const cx = offsetX + (lm.x * displayWidth);
                     const cy = offsetY + (lm.y * displayHeight);
-                    
+
                     return (
                         <Circle
                             key={`joint-${index}`}
@@ -82,4 +82,10 @@ const SkeletonOverlay = ({ landmarks, videoWidth, videoHeight, containerWidth, c
     );
 };
 
-export default SkeletonOverlay;
+// ⚡️ PERFORMANCE FIX: Prevent re-renders when landmarks haven't changed
+// This eliminates jitter by only re-rendering when frame data actually updates
+export default React.memo(SkeletonOverlay, (prevProps, nextProps) => {
+    return prevProps.landmarks === nextProps.landmarks &&
+        prevProps.containerWidth === nextProps.containerWidth &&
+        prevProps.containerHeight === nextProps.containerHeight;
+});

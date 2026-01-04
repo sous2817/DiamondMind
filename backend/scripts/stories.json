@@ -11,43 +11,24 @@
   },
   "stories": [
     {
-      "summary": "Refactor Mobile Uploads to Async/WebSocket Pattern",
+      "summary": "Fix Skeleton Overlay Jitter with React.memo and Frame-Change Detection",
       "priority": {
         "name": "High"
       },
       "details": {
-        "user_story": "As a user, I want the app to handle long processing times without timing out so that I can see my analysis results reliably.",
-        "context": "Render idle timeouts (100s) kill the HTTP connection before AI finishes (105s). We need to decouple the upload from the result.",
+        "user_story": "As a user, I want the skeleton overlay to render smoothly without jitter during video playback, so I can accurately analyze my swing mechanics.",
+        "context": "The overlay was re-rendering 60 times per second (on every timeUpdate event) even when the frame data hadn't changed. This caused visual jitter and wasted rendering cycles. The issue was excessive state updates and missing memoization.",
         "acceptance_criteria": [
-          "Backend accepts upload immediately with 202 Status.",
-          "Backend spawns BackgroundTask for AI processing.",
-          "Mobile App keeps spinner active while waiting for WebSocket result.",
-          "Final result is delivered via WebSocket `data.result` event."
+          "Overlay re-renders only when frame data actually changes (30fps for typical videos).",
+          "No visual jitter during continuous playback.",
+          "Smooth overlay tracking when seeking/scrubbing through video.",
+          "No performance degradation or visual artifacts."
         ],
-        "technical_details": "Refactored `main.py` to use `fastapi.BackgroundTasks` and `ConnectionManager.send_result`. Updated `App.js` to ignore immediate HTTP response and wait for WS.",
+        "technical_details": "Applied React.memo to SkeletonOverlay component with custom comparison function to prevent re-renders when landmarks haven't changed. Added frame index tracking with useRef in App.js to skip redundant state updates. Reduced re-render frequency from 60/sec to video FPS (~30/sec).",
         "edge_cases": [
-          "WebSocket disconnects during processing (User needs to reconnect or retry).",
-          "Upload fails before background task starts."
-        ]
-      }
-    },
-    {
-      "summary": "Optimize Skeleton Overlay Synchronization",
-      "priority": {
-        "name": "High"
-      },
-      "details": {
-        "user_story": "As a user, I want the skeleton overlay to be perfectly synchronized and smooth during video playback, so that I can analyze my swing mechanics without distracting visual jitter.",
-        "context": "The previous implementation used `Array.find()` inside the requestAnimationFrame/timeUpdate loop, which is an O(N) operation. With high frame counts, this caused significant processing overhead and 'jittery' updates where the overlay lagged behind the video.",
-        "acceptance_criteria": [
-          "Replace `Array.find` loop with O(1) direct index calculation in `App.js`.",
-          "Verify the overlay tracks smoothly with the video.",
-          "Ensure logic handles variable frame rates correctly using `result.fps`."
-        ],
-        "technical_details": "Implemented `Math.floor(currentTime * fps)` to calculate the exact frame index instantly. Removed the linear search loop.",
-        "edge_cases": [
-          "Videos with missing FPS metadata (default fallback handled elsewhere or should be checked).",
-          "Seeking/scrubbing should also update the overlay instantly."
+          "Container resize mid-playback should trigger re-render.",
+          "Frame index reset needed when switching videos.",
+          "Backwards seeking should correctly update overlay."
         ]
       }
     }
