@@ -171,22 +171,14 @@ class PoseExtractor:
         best_candidate = max(bat_candidates, key=score_candidate)
         cx_frame, cy_frame = best_candidate['centroid']
         
-        # Estimate bat barrel position (extend from grip along bat direction)
-        dx = cx_frame - grip_x
-        dy = cy_frame - grip_y
-        
-        # Extend 1.5x to approximate barrel position
-        barrel_x = grip_x + int(dx * 1.5)
-        barrel_y = grip_y + int(dy * 1.5)
-        
-        # Clamp to frame boundaries
-        barrel_x = max(0, min(w - 1, barrel_x))
-        barrel_y = max(0, min(h - 1, barrel_y))
+        # Use the centroid of the bat contour directly as the bat position
+        # (The centroid of an elongated bat is already a good representation)
+        # Previous approach of extending 1.5x was pushing coordinates off-screen
         
         # Return normalized coordinates
         return {
-            "x": round(barrel_x / w, 4),
-            "y": round(barrel_y / h, 4)
+            "x": round(cx_frame / w, 4),
+            "y": round(cy_frame / h, 4)
         }
     
     def _detect_bat_color_only(self, frame):
