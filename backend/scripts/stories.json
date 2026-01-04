@@ -1,24 +1,53 @@
 {
   "defaults": {
-    "priority": { "name": "Medium" },
-    "labels": ["TechnicalDebt", "AI-Service", "Maintenance"]
+    "priority": {
+      "name": "Medium"
+    },
+    "labels": [
+      "UX",
+      "Mobile",
+      "Optimization"
+    ]
   },
   "stories": [
     {
-      "summary": "Fix AI Service Dependency Conflicts & Python 3.12 Compatibility",
-      "priority": { "name": "High" },
+      "summary": "Refactor Mobile Uploads to Async/WebSocket Pattern",
+      "priority": {
+        "name": "High"
+      },
       "details": {
-        "user_story": "As a developer, I want a clean and compatible requirements.txt for the AI Service so that I can install dependencies without version conflicts or Python compatibility errors.",
-        "context": "The AI Service (Service 1) runs on Python 3.12. The previous configuration caused build failures due to a version mismatch in `mediapipe` (which required an older Python version) and a critical conflict between `opencv-python` and `opencv-python-headless`.",
+        "user_story": "As a user, I want the app to handle long processing times without timing out so that I can see my analysis results reliably.",
+        "context": "Render idle timeouts (100s) kill the HTTP connection before AI finishes (105s). We need to decouple the upload from the result.",
         "acceptance_criteria": [
-          "Update `requirements.txt` to use `mediapipe==0.10.14` for Python 3.12 compatibility.",
-          "Remove `opencv-python` (full) to resolve namespace collisions with `opencv-python-headless`.",
-          "Verify `pip install` completes successfully.",
-          "Verify the service starts and the `/health` endpoint returns a 200 OK status."
+          "Backend accepts upload immediately with 202 Status.",
+          "Backend spawns BackgroundTask for AI processing.",
+          "Mobile App keeps spinner active while waiting for WebSocket result.",
+          "Final result is delivered via WebSocket `data.result` event."
         ],
-        "technical_details": "Modified `requirements.txt` to unpin `protobuf` (allowing resolution) and removed the GUI-dependent OpenCV library. Verified via `pip check` and `uvicorn` startup.",
+        "technical_details": "Refactored `main.py` to use `fastapi.BackgroundTasks` and `ConnectionManager.send_result`. Updated `App.js` to ignore immediate HTTP response and wait for WS.",
         "edge_cases": [
-          "Local environments may require `pip uninstall opencv-python` to clear out residual files from the conflicting installation."
+          "WebSocket disconnects during processing (User needs to reconnect or retry).",
+          "Upload fails before background task starts."
+        ]
+      }
+    },
+    {
+      "summary": "Optimize Skeleton Overlay Synchronization",
+      "priority": {
+        "name": "High"
+      },
+      "details": {
+        "user_story": "As a user, I want the skeleton overlay to be perfectly synchronized and smooth during video playback, so that I can analyze my swing mechanics without distracting visual jitter.",
+        "context": "The previous implementation used `Array.find()` inside the requestAnimationFrame/timeUpdate loop, which is an O(N) operation. With high frame counts, this caused significant processing overhead and 'jittery' updates where the overlay lagged behind the video.",
+        "acceptance_criteria": [
+          "Replace `Array.find` loop with O(1) direct index calculation in `App.js`.",
+          "Verify the overlay tracks smoothly with the video.",
+          "Ensure logic handles variable frame rates correctly using `result.fps`."
+        ],
+        "technical_details": "Implemented `Math.floor(currentTime * fps)` to calculate the exact frame index instantly. Removed the linear search loop.",
+        "edge_cases": [
+          "Videos with missing FPS metadata (default fallback handled elsewhere or should be checked).",
+          "Seeking/scrubbing should also update the overlay instantly."
         ]
       }
     }

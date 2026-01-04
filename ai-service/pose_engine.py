@@ -115,10 +115,10 @@ class PoseExtractor:
                 landmarks_array = []
                 for landmark in results.pose_landmarks.landmark:
                     landmarks_array.append({
-                        "x": landmark.x,
-                        "y": landmark.y,
-                        "z": landmark.z,
-                        "visibility": landmark.visibility
+                        "x": round(landmark.x, 4),
+                        "y": round(landmark.y, 4),
+                        "z": round(landmark.z, 4),
+                        "visibility": round(landmark.visibility, 4)
                     })
                 
                 # 2. Draw Overlay

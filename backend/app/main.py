@@ -12,6 +12,9 @@ logger = logging.getLogger("backend")
 
 app = FastAPI(title="DiamondMind Main Backend")
 
+import shutil
+from fastapi import BackgroundTasks
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict = {}
@@ -27,6 +30,14 @@ class ConnectionManager:
     async def send_progress(self, job_id: str, progress: int):
         if job_id in self.active_connections:
             await self.active_connections[job_id].send_json({"progress": progress})
+
+    async def send_result(self, job_id: str, result: dict):
+        if job_id in self.active_connections:
+            await self.active_connections[job_id].send_json({"result": result})
+
+    async def send_error(self, job_id: str, message: str):
+        if job_id in self.active_connections:
+            await self.active_connections[job_id].send_json({"error": message})
 
 manager = ConnectionManager()
 
@@ -67,52 +78,91 @@ async def download_video(filename: str):
 
     return StreamingResponse(iterfile(), media_type="video/mp4")
 
+async def process_video_background(file_data: bytes, filename: str, content_type: str, job_id: str):
+    """Refactored async processor - saves file in background"""
+    print(f"Background: 🎬 Starting processing for Job {job_id}")
+    temp_path = None
+    try:
+        # Save file to temp in background
+        temp_dir = "/tmp" if os.path.exists("/tmp") else "."
+        ext = filename.split(".")[-1].lower()
+        temp_path = os.path.join(temp_dir, f"upload_{job_id}.{ext}")
+        
+        print(f"Background: 💾 Saving file to {temp_path}...")
+        with open(temp_path, "wb") as f:
+            f.write(file_data)
+        print(f"Background: ✅ File saved ({len(file_data)} bytes)")
+        
+        # Stream to AI Service
+        with open(temp_path, "rb") as f:
+            files = {"file": (filename, f, content_type)}
+            
+            # Explicit Timeout
+            timeout_config = httpx.Timeout(600.0, connect=60.0)
+
+            async with httpx.AsyncClient(timeout=timeout_config) as client:
+                start_time = time.time()
+                print(f"Background: 📤 Sending to AI Service for Job {job_id}...")
+                response = await client.post(
+                    f"{AI_SERVICE_URL}/analyze/pose", 
+                    files=files,
+                    params={"job_id": job_id}
+                )
+                duration = time.time() - start_time
+                print(f"Background: ✅ AI Service responded in {duration:.2f}s")
+
+        if response.status_code == 200:
+             result = response.json()
+             if "video_filename" in result:
+                result["download_url"] = f"/api/videos/download/{result['video_filename']}"
+             await manager.send_result(job_id, result)
+        else:
+            error_msg = f"AI Error {response.status_code}: {response.text}"
+            print(f"Background Error: {error_msg}")
+            await manager.send_error(job_id, error_msg)
+
+    except Exception as e:
+        print(f"Background Exception: {e}")
+        await manager.send_error(job_id, str(e))
+    finally:
+        # Cleanup temp file
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+            print(f"Background: 🧹 Cleaned up {temp_path}")
+
 @app.post("/api/videos/upload")
 async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
+    """
+    ⚡️ ASYNC UPLOAD PATTERN:
+    1. Read file into memory immediately (non-blocking)
+    2. Return 202 Accepted ASAP (prevents load balancer timeout)
+    3. Save & Process file in background task
+    4. Push results via WebSocket
+    """
     allowed_extensions = ["mp4", "mov", "avi"]
     ext = file.filename.split(".")[-1].lower()
     if ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     try:
-        files = {"file": (file.filename, file.file, file.content_type)}
+        print(f"Backend: 📥 Received upload request for Job {job_id}")
         
-        async with httpx.AsyncClient(timeout=600.0) as client:
-            start_time = time.time()
-            logger.info(f"🚀 Sending request to AI Service for Job {job_id}...")
-            
-            response = await client.post(
-                f"{AI_SERVICE_URL}/analyze/pose", 
-                files=files,
-                params={"job_id": job_id}
-            )
-            
-            duration = time.time() - start_time
-            logger.info(f"✅ AI Service responded in {duration:.2f}s with status {response.status_code}")
+        # ⚡️ KEY FIX: Read file into memory WITHOUT blocking the response
+        # This is fast enough (<5s) to avoid timeout, then we return immediately
+        file_data = await file.read()
+        file_size_mb = len(file_data) / (1024 * 1024)
+        print(f"Backend: 📦 File read into memory ({file_size_mb:.2f} MB)")
         
-        if response.status_code != 200:
-            try:
-                ai_data = response.json()
-                ai_error = ai_data.get("detail") or ai_data.get("error") or "Unknown AI Error"
-            except:
-                ai_error = response.text
-            raise HTTPException(status_code=response.status_code, detail=f"AI Service: {ai_error}")
+        # ⚡️ IMMEDIATE RESPONSE: Return 202 before any processing
+        # This closes the HTTP connection in <5 seconds, avoiding the 60s timeout
+        import asyncio
+        asyncio.create_task(
+            process_video_background(file_data, file.filename, file.content_type, job_id)
+        )
+        
+        print(f"Backend: ✅ Returning 202 Accepted (Job {job_id} queued)")
+        return {"status": "processing", "message": "Video accepted for background processing", "job_id": job_id}
 
-        # Append the public download URL to the response
-        result = response.json()
-        if "video_filename" in result:
-             # Construct the Proxy URL for the frontend
-             # Note: In production, use your actual domain instead of relying on the request host if behind a proxy
-            result["download_url"] = f"/api/videos/download/{result['video_filename']}"
-
-        return result
-
-    except httpx.ReadTimeout:
-        logger.error(f"❌ AI Service Timeout after {time.time() - start_time:.2f}s")
-        raise HTTPException(status_code=504, detail="AI Processing Timed Out (Limit: 600s)")
-    except httpx.ConnectError:
-        logger.error("❌ Could not connect to AI Service")
-        raise HTTPException(status_code=503, detail="AI Service is currently unreachable.")
     except Exception as e:
-        logger.error(f"❌ Upload Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")
+        logger.error(f"❌ Upload Handling Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

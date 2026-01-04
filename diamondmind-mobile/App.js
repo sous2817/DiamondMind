@@ -139,9 +139,15 @@ export default function App() {
   useEffect(() => {
     if (!player || !videoUri || !result) return;
     const sub = player.addListener('timeUpdate', (payload) => {
-      if (result?.frames) {
-        const frame = result.frames.find(f => f.timestamp >= payload.currentTime * 1000);
-        if (frame) setCurrentFrameData(frame.landmarks);
+      if (result?.frames && result.fps) {
+        // ⚡️ OPTIMIZATION: Use O(1) direct index access instead of O(N) .find()
+        // This eliminates the "loop over all frames" jitter
+        const frameIndex = Math.floor(payload.currentTime * result.fps);
+        const frame = result.frames[frameIndex];
+
+        if (frame) {
+          setCurrentFrameData(frame.landmarks);
+        }
       }
     });
     return () => sub.remove();
@@ -161,6 +167,15 @@ export default function App() {
     // Use centralized config
     const ws = new WebSocket(`${Config.WS_BASE_URL}/ws/progress/${jobId}`);
 
+    // ✅ HEARTBEAT: Send a ping every 25s to keep the Read timeout from triggering on the LB
+    // Render/Nginx closes connections if no data flows from Client -> Server for 60-100s.
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        console.log("💓 Sending Ping...");
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 25000);
+
     // ✅ LOG: Connection Success (Section 14)
     ws.onopen = () => {
       console.log("✅ WebSocket connected");
@@ -173,21 +188,55 @@ export default function App() {
         console.log(`📊 Progress update: ${data.progress}%`);
         setProgress(data.progress);
       }
+
+      // ⚡️ ASYNC Handling: Result comes via WebSocket now
+      if (data.result) {
+        console.log("✅ Received Result via WebSocket");
+        setResult(data.result);
+        setLoading(false);
+        clearInterval(pingInterval);
+        ws.close();
+      }
+
+      // ⚡️ ASYNC Handling: Errors via WebSocket
+      if (data.error) {
+        console.error("❌ Received Error via WebSocket:", data.error);
+        setError(data.error);
+        setLoading(false);
+        clearInterval(pingInterval);
+        ws.close();
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("🔌 WebSocket closed");
+      clearInterval(pingInterval);
     };
 
     try {
       // Note: "Starting upload..." log is handled inside UploadService.js
       const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
-      if (data) setResult(data);
-      // Note: "Analysis complete..." log is handled inside UploadService.js
+
+      // If sync response contains result (legacy behavior or fast response)
+      if (data && data.frames) {
+        setResult(data);
+        setLoading(false);
+        clearInterval(pingInterval);
+        ws.close();
+      } else {
+        // ⏳ Async Mode: Server said "Processing", so we wait.
+        // Do NOT set loading to false here.
+        console.log("⏳ Upload accepted, waiting for AI processing...");
+      }
+
     } catch (err) {
       console.error("❌ UPLOAD FAILED:", err);
       if (err.message !== 'canceled') {
         const msg = err.response?.data?.detail || err.message || "Connection timed out. Check server status.";
         setError(msg);
       }
-    } finally {
       setLoading(false);
+      clearInterval(pingInterval);
       ws.close();
     }
   };
