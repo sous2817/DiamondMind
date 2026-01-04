@@ -6,29 +6,36 @@
     "labels": [
       "UX",
       "Mobile",
-      "Optimization"
+      "Feature"
     ]
   },
   "stories": [
     {
-      "summary": "Fix Skeleton Overlay Jitter with React.memo and Frame-Change Detection",
+      "summary": "Add Toggle Control for Skeleton Overlay Visibility",
       "priority": {
-        "name": "High"
+        "name": "Medium"
       },
       "details": {
-        "user_story": "As a user, I want the skeleton overlay to render smoothly without jitter during video playback, so I can accurately analyze my swing mechanics.",
-        "context": "The overlay was re-rendering 60 times per second (on every timeUpdate event) even when the frame data hadn't changed. This caused visual jitter and wasted rendering cycles. The issue was excessive state updates and missing memoization.",
+        "user_story": "As a user, I want to toggle the skeleton overlay on and off during video playback, so I can choose whether to view the pose analysis or just the raw video.",
+        "context": "Currently, the skeleton overlay is always visible when analysis results are available. Users may want to compare their swing with and without the overlay, or simply prefer viewing the raw video without visual annotations.",
         "acceptance_criteria": [
-          "Overlay re-renders only when frame data actually changes (30fps for typical videos).",
-          "No visual jitter during continuous playback.",
-          "Smooth overlay tracking when seeking/scrubbing through video.",
-          "No performance degradation or visual artifacts."
+          "A toggle button/switch is visible in the UI when analysis results are loaded.",
+          "Clicking the toggle hides/shows the skeleton overlay without affecting video playback.",
+          "Toggle state persists during video scrubbing and seeking.",
+          "Overlay visibility preference is maintained when switching between analyzed videos in the same session.",
+          "Toggle is disabled or hidden when no analysis results are available."
         ],
-        "technical_details": "Applied React.memo to SkeletonOverlay component with custom comparison function to prevent re-renders when landmarks haven't changed. Added frame index tracking with useRef in App.js to skip redundant state updates. Reduced re-render frequency from 60/sec to video FPS (~30/sec).",
+        "technical_details": [
+          "Add a boolean state variable (e.g., `showOverlay`) in App.js.", 
+          "Conditionally render the SkeletonOverlay component based on this state.",
+          "Add a toggle button (likely near playback controls) that updates the state.",
+          "Ensure the toggle doesn't trigger unnecessary re-renders of the video player."
+        ],
         "edge_cases": [
-          "Container resize mid-playback should trigger re-render.",
-          "Frame index reset needed when switching videos.",
-          "Backwards seeking should correctly update overlay."
+          "Toggle should be disabled during video upload/processing (no results yet).",
+          "Switching videos should reset or maintain toggle state (decide on UX preference).",
+          "Toggle state should not interfere with overlay synchronization logic.",
+          "Consider accessibility: toggle should have proper ARIA labels for screen readers."
         ]
       }
     }

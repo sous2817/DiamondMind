@@ -8,6 +8,14 @@ import numpy as np
 DEFAULT_BACKEND = "https://diamondmind-backend-yalf.onrender.com"
 BACKEND_URL = os.environ.get("BACKEND_URL", DEFAULT_BACKEND)
 
+# 2. Bat Detection HSV Configuration (Environment Variables)
+# Default values work for black/dark bats. Adjust for different colors:
+# Red bats: [0, 100, 100] to [10, 255, 255]
+# Blue bats: [100, 100, 100] to [130, 255, 255]
+# Black bats: [0, 0, 0] to [180, 255, 50]
+BAT_HSV_LOWER = list(map(int, os.environ.get("BAT_HSV_LOWER", "0,0,0").split(",")))
+BAT_HSV_UPPER = list(map(int, os.environ.get("BAT_HSV_UPPER", "180,255,50").split(",")))
+
 # Standard MediaPipe 33-point topology connections
 POSE_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 7), (0, 4), (4, 5),
@@ -39,6 +47,73 @@ class PoseExtractor:
         except Exception as e:
             print(f"⚠️ Progress report failed: {e}")
             pass
+
+    def _detect_bat_hsv(self, frame, hand_landmarks=None):
+        """
+        Detects bat position using HSV color-based tracking.
+        Returns normalized (x, y) coordinates or None if bat not detected.
+        """
+        # Convert BGR to HSV
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        
+        # Create color mask
+        lower_bound = np.array(BAT_HSV_LOWER)
+        upper_bound = np.array(BAT_HSV_UPPER)
+        mask = cv2.inRange(hsv, lower_bound, upper_bound)
+        
+        # Apply morphological operations to reduce noise
+        kernel = np.ones((5, 5), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        
+        # Find contours
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return None
+        
+        # Filter by minimum area (avoid noise)
+        min_area = 500  # pixels
+        valid_contours = [c for c in contours if cv2.contourArea(c) > min_area]
+        
+        if not valid_contours:
+            return None
+        
+        # If hand landmarks available, prefer contours near hands
+        if hand_landmarks:
+            h, w = frame.shape[:2]
+            # Get right hand position (landmark 16)
+            right_hand = hand_landmarks.landmark[16]
+            hand_x, hand_y = int(right_hand.x * w), int(right_hand.y * h)
+            
+            # Find contour closest to hand
+            def distance_to_hand(contour):
+                M = cv2.moments(contour)
+                if M["m00"] == 0:
+                    return float('inf')
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                return ((cx - hand_x) ** 2 + (cy - hand_y) ** 2) ** 0.5
+            
+            bat_contour = min(valid_contours, key=distance_to_hand)
+        else:
+            # Otherwise, use largest contour
+            bat_contour = max(valid_contours, key=cv2.contourArea)
+        
+        # Calculate centroid
+        M = cv2.moments(bat_contour)
+        if M["m00"] == 0:
+            return None
+        
+        cx = int(M["m10"] / M["m00"])
+        cy = int(M["m01"] / M["m00"])
+        
+        # Normalize to 0-1 range
+        h, w = frame.shape[:2]
+        return {
+            "x": round(cx / w, 4),
+            "y": round(cy / h, 4)
+        }
 
     def _draw_overlay(self, image, landmarks):
         """Draws the skeleton overlay on the frame."""
@@ -102,16 +177,17 @@ class PoseExtractor:
             # Convert BGR to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
-            # Process
+            # Process Pose
             results = self.pose.process(frame_rgb)
             
             timestamp_ms = (frame_count / fps) * 1000
             landmarks_array = None
+            bat_position = None
             
             if results.pose_landmarks:
                 valid_frames += 1
                 
-                # 1. Build JSON Data
+                # 1. Build JSON Data for Landmarks
                 landmarks_array = []
                 for landmark in results.pose_landmarks.landmark:
                     landmarks_array.append({
@@ -121,9 +197,14 @@ class PoseExtractor:
                         "visibility": round(landmark.visibility, 4)
                     })
                 
-                # 2. Draw Overlay
+                # 2. Detect Bat Position (HSV-based)
+                bat_position = self._detect_bat_hsv(frame, results.pose_landmarks)
+                
+                # 3. Draw Overlay
                 final_frame = self._draw_overlay(frame, results.pose_landmarks)
             else:
+                # No person detected, still try bat detection
+                bat_position = self._detect_bat_hsv(frame)
                 final_frame = frame
 
             # Write frame to video
@@ -132,7 +213,8 @@ class PoseExtractor:
             # Add to JSON list
             frames.append({
                 "timestamp": timestamp_ms,
-                "landmarks": landmarks_array
+                "landmarks": landmarks_array,
+                "bat_position": bat_position
             })
 
             frame_count += 1

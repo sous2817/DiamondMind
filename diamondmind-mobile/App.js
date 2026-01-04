@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { UploadCloud, Maximize2, Minimize2, AlertCircle, X, Zap, ChevronRight } from 'lucide-react-native';
+import { UploadCloud, Maximize2, Minimize2, AlertCircle, X, Zap, ChevronRight, Eye, EyeOff } from 'lucide-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import UploadService from './src/services/UploadService.js';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
+import BatTrailOverlay from './src/components/BatTrailOverlay';
 import { Config } from './src/config.js';
 
 // --- MODERN THEME ---
@@ -126,6 +127,8 @@ export default function App() {
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [fullscreenDimensions, setFullscreenDimensions] = useState({ width: 0, height: 0 });
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [showBatTrail, setShowBatTrail] = useState(true);
 
   // ⚡️ PERFORMANCE: Track current frame index to avoid redundant state updates
   const currentFrameIndexRef = useRef(-1);
@@ -172,6 +175,41 @@ export default function App() {
       });
     }
   }, [player]);
+
+  // Calculate attack angle from bat trail data
+  const calculateAttackAngle = () => {
+    if (!result?.frames) return null;
+
+    const batPositions = result.frames
+      .map((frame, idx) => ({ ...frame.bat_position, frameIndex: idx }))
+      .filter(pos => pos.x !== undefined && pos.y !== undefined);
+
+    if (batPositions.length < 15) return null; // Need enough data points
+
+    // Find contact point (lowest Y value, highest point in screen coords)
+    const contactIdx = batPositions.reduce((minIdx, pos, idx) =>
+      pos.y < batPositions[minIdx].y ? idx : minIdx, 0);
+
+    const contactFrame = batPositions[contactIdx];
+
+    // Get positions 5 frames before and after contact
+    const beforeIdx = Math.max(0, contactIdx - 5);
+    const afterIdx = Math.min(batPositions.length - 1, contactIdx + 5);
+
+    const beforePos = batPositions[beforeIdx];
+    const afterPos = batPositions[afterIdx];
+
+    // Calculate angle (in degrees)
+    // Positive angle = upward swing, Negative = downward
+    const deltaY = afterPos.y - beforePos.y;
+    const deltaX = afterPos.x - beforePos.x;
+    const angleRad = Math.atan2(deltaY, deltaX);
+    const angleDeg = angleRad * (180 / Math.PI);
+
+    return Math.round(angleDeg);
+  };
+
+  const attackAngle = result ? calculateAttackAngle() : null;
 
   const handleUpload = async (uri) => {
     setLoading(true);
@@ -287,6 +325,8 @@ export default function App() {
     setCurrentFrameData(null);
     setIsFullscreen(false);
     setError(null);
+    setShowOverlay(true); // Reset overlay to visible
+    setShowBatTrail(true); // Reset bat trail to visible
     currentFrameIndexRef.current = -1; // Reset frame tracking
   };
 
@@ -302,16 +342,40 @@ export default function App() {
           <View style={{ flex: 1 }} onLayout={(e) => setFullscreenDimensions(e.nativeEvent.layout)}>
             <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              <SkeletonOverlay
-                landmarks={currentFrameData}
+              {showOverlay && (
+                <SkeletonOverlay
+                  landmarks={currentFrameData}
+                  videoWidth={videoDimensions.width}
+                  videoHeight={videoDimensions.height}
+                  containerWidth={fullscreenDimensions.width}
+                  containerHeight={fullscreenDimensions.height}
+                />
+              )}
+            </View>
+            {showBatTrail && (
+              <BatTrailOverlay
+                frames={result.frames}
+                currentFrameIndex={currentFrameIndexRef.current}
                 videoWidth={videoDimensions.width}
                 videoHeight={videoDimensions.height}
                 containerWidth={fullscreenDimensions.width}
                 containerHeight={fullscreenDimensions.height}
               />
-            </View>
+            )}
             <TouchableOpacity style={styles.closeFab} onPress={() => setIsFullscreen(false)}>
               <Minimize2 size={24} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ position: 'absolute', top: 60, left: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => setShowOverlay(!showOverlay)}
+            >
+              {showOverlay ? <Eye size={24} color="#FFF" /> : <EyeOff size={24} color="#FFF" />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ position: 'absolute', top: 110, left: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => setShowBatTrail(!showBatTrail)}
+            >
+              <Text style={{ color: '#FFF', fontSize: 20, fontWeight: 'bold' }}>🏏</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -377,14 +441,38 @@ export default function App() {
                 >
                   <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
                   <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                    <SkeletonOverlay
-                      landmarks={currentFrameData}
+                    {showOverlay && (
+                      <SkeletonOverlay
+                        landmarks={currentFrameData}
+                        videoWidth={videoDimensions.width}
+                        videoHeight={videoDimensions.height}
+                        containerWidth={containerDimensions.width}
+                        containerHeight={containerDimensions.height}
+                      />
+                    )}
+                  </View>
+                  {showBatTrail && (
+                    <BatTrailOverlay
+                      frames={result.frames}
+                      currentFrameIndex={currentFrameIndexRef.current}
                       videoWidth={videoDimensions.width}
                       videoHeight={videoDimensions.height}
                       containerWidth={containerDimensions.width}
                       containerHeight={containerDimensions.height}
                     />
-                  </View>
+                  )}
+                  <TouchableOpacity
+                    style={{ position: 'absolute', bottom: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
+                    onPress={() => setShowOverlay(!showOverlay)}
+                  >
+                    {showOverlay ? <Eye size={20} color="#FFF" /> : <EyeOff size={20} color="#FFF" />}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ position: 'absolute', bottom: 16, left: 60, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
+                    onPress={() => setShowBatTrail(!showBatTrail)}
+                  >
+                    <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>🏏</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={{ position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
                     onPress={() => setIsFullscreen(true)}
@@ -392,6 +480,17 @@ export default function App() {
                     <Maximize2 size={20} color="#FFF" />
                   </TouchableOpacity>
                 </View>
+
+                {/* Attack Angle Metric */}
+                {attackAngle !== null && (
+                  <View style={{ marginTop: 16, backgroundColor: THEME.card, padding: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                    <Text style={{ fontSize: 14, color: THEME.subtext, fontWeight: '600', marginBottom: 4 }}>Attack Angle</Text>
+                    <Text style={{ fontSize: 28, color: THEME.primary, fontWeight: 'bold' }}>{attackAngle}°</Text>
+                    <Text style={{ fontSize: 12, color: THEME.subtext, marginTop: 4 }}>
+                      {attackAngle > 0 ? '↗ Upward swing' : attackAngle < 0 ? '↘ Downward swing' : '→ Level swing'}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Action Buttons */}
                 <View style={styles.actionBar}>

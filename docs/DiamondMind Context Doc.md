@@ -7,18 +7,18 @@
 ## 📋 Table of Contents
 
 1. [Engagement Protocol](#1-engagement-protocol)
-2. [Project Identity & Stack](#2-project-identity--stack)
+2. [Project Identity &amp; Stack](#2-project-identity--stack)
 3. [Tribal Knowledge](#3-tribal-knowledge)
-4. [Configuration & Wiring](#4-configuration--wiring)
+4. [Configuration &amp; Wiring](#4-configuration--wiring)
 5. [Deployment Manual](#5-deployment-manual)
 6. [Local Development](#6-local-development)
 7. [Project Structure Mapping](#7-project-structure-mapping)
 8. [API Contracts](#8-api-contracts)
 9. [Data Flow Architecture](#9-data-flow-architecture)
 10. [Error Handling](#10-error-handling)
-11. [Storage & Persistence](#11-storage--persistence)
-12. [Authentication & Security](#12-authentication--security)
-13. [Performance & Constraints](#13-performance--constraints)
+11. [Storage &amp; Persistence](#11-storage--persistence)
+12. [Authentication &amp; Security](#12-authentication--security)
+13. [Performance &amp; Constraints](#13-performance--constraints)
 14. [Testing Strategy](#14-testing-strategy)
 15. [Dependency Versions](#15-dependency-versions)
 16. [Additional Configuration Files](#16-additional-configuration-files)
@@ -35,6 +35,7 @@
 > **I (The AI) have read access to your workspace and will inspect files before modification.**
 
 #### The "First Inspection" Rule
+
 Before modifying a file for the first time in this session, I **MUST** use `view_file` to see its current state and confirm my understanding aligns with the latest code.
 
 #### State Retention
@@ -71,7 +72,7 @@ At the end of every JIRA Story or major bug fix, run this prompt:
 > - Dependency Version updates (Section 15)
 > - Any new Important Notes
 >
-> Always generate the whole document, never include statements like 'refer to previous version'. Each time the file is generated it must be able to stand alone.
+> If there are material changes, always generate the whole document, never include statements like 'refer to previous version'. Each time the file is generated it must be able to stand alone.
 >
 > Output the full, updated Markdown file."
 
@@ -232,6 +233,7 @@ setVideoUri(newUri); // The hook detects this change automatically
 **The Fix:** Use `Math.floor(currentTime * fps)` (O(1)) for instant index calculation.
 
 **✅ Required Code Pattern:**
+
 ```javascript
 // App.js
 const frameIndex = Math.floor(payload.currentTime * result.fps);
@@ -247,6 +249,7 @@ const frame = result.frames[frameIndex];
 **The Fix:** Read file into memory and return 202 immediately, then process in background.
 
 **Implementation:**
+
 1. Mobile uploads video via multipart HTTP POST
 2. Backend reads file into memory (~5 seconds)
 3. Backend returns **202 Accepted immediately** (connection closes in <10s)
@@ -254,23 +257,25 @@ const frame = result.frames[frameIndex];
 5. Backend pushes final result to Mobile via **WebSocket**
 
 **✅ Required Code Pattern (Backend):**
+
 ```python
 # backend/app/main.py
 @app.post("/api/videos/upload")
 async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
     # Read file into memory (fast, <10s)
     file_data = await file.read()
-    
+  
     # Spawn background task (fire-and-forget)
     asyncio.create_task(
         process_video_background(file_data, file.filename, file.content_type, job_id)
     )
-    
+  
     # Return immediately
     return {"status": "processing", "job_id": job_id}
 ```
 
 **✅ Required Code Pattern (Mobile):**
+
 ```javascript
 // App.js - Wait for WebSocket result, not HTTP response
 ws.onmessage = (e) => {
@@ -280,6 +285,7 @@ ws.onmessage = (e) => {
 ```
 
 **Memory Considerations:**
+
 - Files held in memory briefly during upload (~5-10s)
 - Render Free Tier: 512MB RAM
 - Typical swing videos: 20-100MB
@@ -294,6 +300,7 @@ ws.onmessage = (e) => {
 **The Fix:** Round all coordinates to **4 decimal places** in the AI Service.
 
 **✅ Required Code Pattern:**
+
 ```python
 # ai-service/pose_engine.py
 "x": round(landmark.x, 4),
@@ -310,6 +317,7 @@ ws.onmessage = (e) => {
 **The Fix:** Detect HTML responses and replace with clean, user-friendly error messages.
 
 **✅ Required Code Pattern:**
+
 ```python
 # backend/app/main.py - ConnectionManager.send_error()
 if message.strip().startswith("<!DOCTYPE") or message.strip().startswith("<html"):
@@ -520,7 +528,7 @@ function Show-ContextMap {
             # Print the item
             if ($item.PSIsContainer) {
                 Write-Output "$Indent$prefix$($item.Name)/"
-            
+          
                 # Recurse
                 Print-Tree -CurrentPath $item.FullName -Indent ($Indent + $childIndent) -CurrentDepth ($CurrentDepth + 1)
             } else {
@@ -558,12 +566,12 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 
 ### 🔌 Backend (API Gateway)
 
-| Endpoint                        | Method    | Purpose                          | Request Format                                           | Response Format              |
-| ------------------------------- | --------- | -------------------------------- | -------------------------------------------------------- | ---------------------------- |
+| Endpoint                        | Method    | Purpose                          | Request Format                                           | Response Format                   |
+| ------------------------------- | --------- | -------------------------------- | -------------------------------------------------------- | --------------------------------- |
 | `/api/videos/upload`          | POST      | Upload video for analysis        | Multipart form-data (video file) +`job_id` query param | JSON `{"status": "processing"}` |
-| `/ws/progress/{job_id}`       | WebSocket | Real-time progress & results     | WebSocket connection                                     | JSON events                  |
-| `/api/jobs/{job_id}/progress` | POST      | Receive progress from AI service | JSON:`{"progress": int}`                               | JSON:`{"status": "ok"}`    |
-| `/docs`                       | GET       | FastAPI Swagger documentation    | N/A                                                      | Interactive API docs         |
+| `/ws/progress/{job_id}`       | WebSocket | Real-time progress & results     | WebSocket connection                                     | JSON events                       |
+| `/api/jobs/{job_id}/progress` | POST      | Receive progress from AI service | JSON:`{"progress": int}`                               | JSON:`{"status": "ok"}`         |
+| `/docs`                       | GET       | FastAPI Swagger documentation    | N/A                                                      | Interactive API docs              |
 
 ---
 
@@ -691,5 +699,6 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 - `sync_jira.py update` - Updates existing tickets
 
 ### Recent Tickets:
+
 - **DM-49:** Optimize Skeleton Overlay Synchronization (Closed)
 - **DM-50:** Async Backend Refactor (In Progress)
