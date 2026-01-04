@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.11** | AI-Driven Baseball Analytics Platform
+**Version 2.12** | AI-Driven Baseball Analytics Platform
 
 ---
 
@@ -241,24 +241,50 @@ const frame = result.frames[frameIndex];
 
 ---
 
-### I. Async Upload & Processing (The "Idle Timeout" Fix)
+### I. Async Upload & Processing (The "Load Balancer Timeout" Fix)
 
-**Problem:** Load balancers (Render/AWS) kill idle connections after ~100s. Our AI analysis takes ~105s, dealing a "Timeout Error" to the mobile app even if the backend succeeds.
+**Problem:** Render's load balancer kills HTTP connections after 60 seconds of inactivity. Large video uploads took 60+ seconds to save to disk, causing timeout errors before the backend could return 202 Accepted.
 
-**The Fix:** Decouple the HTTP response from the AI processing.
-1. Mobile Uploads video.
-2. Backend responds **202 Accepted** immediately.
-3. Backend processes video in a **BackgroundTask**.
-4. Backend pushes the final result to Mobile via **WebSocket**.
+**The Fix:** Read file into memory and return 202 immediately, then process in background.
 
-**✅ Required Code Pattern:**
+**Implementation:**
+1. Mobile uploads video via multipart HTTP POST
+2. Backend reads file into memory (~5 seconds)
+3. Backend returns **202 Accepted immediately** (connection closes in <10s)
+4. Background task saves file to disk and sends to AI service
+5. Backend pushes final result to Mobile via **WebSocket**
+
+**✅ Required Code Pattern (Backend):**
+```python
+# backend/app/main.py
+@app.post("/api/videos/upload")
+async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
+    # Read file into memory (fast, <10s)
+    file_data = await file.read()
+    
+    # Spawn background task (fire-and-forget)
+    asyncio.create_task(
+        process_video_background(file_data, file.filename, file.content_type, job_id)
+    )
+    
+    # Return immediately
+    return {"status": "processing", "job_id": job_id}
+```
+
+**✅ Required Code Pattern (Mobile):**
 ```javascript
-// App.js
+// App.js - Wait for WebSocket result, not HTTP response
 ws.onmessage = (e) => {
     if (data.result) { setResult(data.result); } // Success via WS
 }
-// Do not trust the HTTP response to have the result.
+// HTTP response only confirms upload was accepted, not that processing is complete
 ```
+
+**Memory Considerations:**
+- Files held in memory briefly during upload (~5-10s)
+- Render Free Tier: 512MB RAM
+- Typical swing videos: 20-100MB
+- Safe for 2-3 concurrent uploads
 
 ---
 
@@ -275,6 +301,28 @@ ws.onmessage = (e) => {
 "y": round(landmark.y, 4),
 # ...
 ```
+
+---
+
+### K. Error Message Sanitization (The "HTML Spam" Fix)
+
+**Problem:** When the AI service returns HTML error pages (504, 503, 502), the raw HTML was being logged to mobile app console and sent via WebSocket, creating massive log spam.
+
+**The Fix:** Detect HTML responses and replace with clean, user-friendly error messages.
+
+**✅ Required Code Pattern:**
+```python
+# backend/app/main.py - ConnectionManager.send_error()
+if message.strip().startswith("<!DOCTYPE") or message.strip().startswith("<html"):
+    if "504" in message:
+        clean_msg = "AI service timeout - please try again"
+    elif "503" in message:
+        clean_msg = "AI service unavailable - service may be starting up"
+    # ...
+    await self.active_connections[job_id].send_json({"error": clean_msg})
+```
+
+**Result:** Mobile app shows "AI service timeout - please try again" instead of 5KB of HTML.
 
 ---
 

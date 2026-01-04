@@ -37,7 +37,22 @@ class ConnectionManager:
 
     async def send_error(self, job_id: str, message: str):
         if job_id in self.active_connections:
-            await self.active_connections[job_id].send_json({"error": message})
+            # Strip HTML error pages and replace with friendly messages
+            if message.strip().startswith("<!DOCTYPE") or message.strip().startswith("<html"):
+                # Extract status code if present
+                if "504" in message:
+                    clean_msg = "AI service timeout - please try again"
+                elif "503" in message:
+                    clean_msg = "AI service unavailable - service may be starting up"
+                elif "502" in message:
+                    clean_msg = "AI service connection error"
+                else:
+                    clean_msg = "AI service error - please retry"
+            else:
+                # For non-HTML errors, keep first 150 chars
+                clean_msg = message[:150] if len(message) > 150 else message
+            
+            await self.active_connections[job_id].send_json({"error": clean_msg})
 
 manager = ConnectionManager()
 
@@ -97,8 +112,8 @@ async def process_video_background(file_data: bytes, filename: str, content_type
         with open(temp_path, "rb") as f:
             files = {"file": (filename, f, content_type)}
             
-            # Explicit Timeout
-            timeout_config = httpx.Timeout(600.0, connect=60.0)
+            # Explicit Timeout - 15 minutes to handle cold starts
+            timeout_config = httpx.Timeout(900.0, connect=60.0)
 
             async with httpx.AsyncClient(timeout=timeout_config) as client:
                 start_time = time.time()
@@ -117,12 +132,15 @@ async def process_video_background(file_data: bytes, filename: str, content_type
                 result["download_url"] = f"/api/videos/download/{result['video_filename']}"
              await manager.send_result(job_id, result)
         else:
-            error_msg = f"AI Error {response.status_code}: {response.text}"
+            # Truncate long error responses (e.g., HTML error pages)
+            error_text = response.text[:200] if len(response.text) > 200 else response.text
+            error_msg = f"AI Error {response.status_code}: {error_text}"
             print(f"Background Error: {error_msg}")
             await manager.send_error(job_id, error_msg)
 
     except Exception as e:
-        print(f"Background Exception: {e}")
+        error_str = str(e)[:200] if len(str(e)) > 200 else str(e)
+        print(f"Background Exception: {error_str}")
         await manager.send_error(job_id, str(e))
     finally:
         # Cleanup temp file
