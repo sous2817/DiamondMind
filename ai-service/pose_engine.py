@@ -141,6 +141,9 @@ class PoseExtractor:
                 percent = (frame_count / total_frames) * 100
                 self.report_progress(job_id, percent)
 
+            if frame_count % 50 == 0:
+                print(f"   ...Processed {frame_count}/{total_frames} frames ({timestamp_ms:.0f}ms)")
+
         cap.release()
         out.release()
         

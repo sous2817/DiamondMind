@@ -2,12 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { UploadCloud, Maximize2, Minimize2, AlertCircle, X, Download, Zap, ChevronRight } from 'lucide-react-native';
+import { UploadCloud, Maximize2, Minimize2, AlertCircle, X, Zap, ChevronRight } from 'lucide-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import UploadService from './src/services/UploadService.js';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
-import { captureRef } from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
 import { Config } from './src/config.js';
 
 // --- MODERN THEME ---
@@ -128,8 +126,6 @@ export default function App() {
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [fullscreenDimensions, setFullscreenDimensions] = useState({ width: 0, height: 0 });
-  const viewShotRef = useRef(null);
-  const [isExporting, setIsExporting] = useState(false);
 
   // ⚡️ FIX: Logic moved inside the hook to avoid race conditions
   const player = useVideoPlayer(videoUri, (p) => {
@@ -139,18 +135,6 @@ export default function App() {
       p.play();
     }
   });
-
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      const uri = await captureRef(viewShotRef, { format: 'png', quality: 0.8 });
-      await Sharing.shareAsync(uri);
-    } catch (err) {
-      console.error("Export Failed:", err);
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   useEffect(() => {
     if (!player || !videoUri || !result) return;
@@ -317,7 +301,6 @@ export default function App() {
             {result && (
               <View style={styles.resultsContainer}>
                 <View
-                  ref={viewShotRef}
                   style={[styles.videoFrame, { aspectRatio: videoRatio }]}
                   onLayout={(e) => setContainerDimensions(e.nativeEvent.layout)}
                 >
@@ -345,21 +328,7 @@ export default function App() {
                     <X size={20} color={THEME.primary} />
                     <Text style={styles.actionBtnText}>New Swing</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: THEME.accent }]}
-                    onPress={handleExport}
-                    disabled={isExporting}
-                  >
-                    {isExporting ? (
-                      <ActivityIndicator color="#FFF" />
-                    ) : (
-                      <>
-                        <Download size={20} color="#FFF" />
-                        <Text style={[styles.actionBtnText, { color: '#FFF' }]}>Save Analysis</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                  {/* Download button removed as requested */}
                 </View>
               </View>
             )}

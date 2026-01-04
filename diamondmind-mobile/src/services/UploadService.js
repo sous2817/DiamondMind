@@ -13,7 +13,7 @@ const UploadService = {
                 fieldName: 'file',
                 httpMethod: 'POST',
                 uploadType: 1, // Tribal Knowledge: Must be Integer 1
-                timeout: 120000,
+                timeout: 600000,
             });
 
             if (response.status >= 200 && response.status < 300) {

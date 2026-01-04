@@ -3,6 +3,12 @@ import os
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+import time
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("backend")
 
 app = FastAPI(title="DiamondMind Main Backend")
 
@@ -52,7 +58,7 @@ AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8001")
 async def download_video(filename: str):
     """Proxies the file download from AI Service to the Client."""
     async def iterfile():
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             async with client.stream("GET", f"{AI_SERVICE_URL}/download/{filename}") as r:
                 if r.status_code != 200:
                     raise HTTPException(status_code=r.status_code, detail="Could not retrieve video")
@@ -71,12 +77,18 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
     try:
         files = {"file": (file.filename, file.file, file.content_type)}
         
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            start_time = time.time()
+            logger.info(f"🚀 Sending request to AI Service for Job {job_id}...")
+            
             response = await client.post(
                 f"{AI_SERVICE_URL}/analyze/pose", 
                 files=files,
                 params={"job_id": job_id}
             )
+            
+            duration = time.time() - start_time
+            logger.info(f"✅ AI Service responded in {duration:.2f}s with status {response.status_code}")
         
         if response.status_code != 200:
             try:
@@ -96,9 +108,11 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None):
         return result
 
     except httpx.ReadTimeout:
-        raise HTTPException(status_code=504, detail="AI Processing Timed Out (Limit: 300s)")
+        logger.error(f"❌ AI Service Timeout after {time.time() - start_time:.2f}s")
+        raise HTTPException(status_code=504, detail="AI Processing Timed Out (Limit: 600s)")
     except httpx.ConnectError:
+        logger.error("❌ Could not connect to AI Service")
         raise HTTPException(status_code=503, detail="AI Service is currently unreachable.")
     except Exception as e:
-        print(f"Upload Error: {str(e)}")
+        logger.error(f"❌ Upload Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")

@@ -1,23 +1,24 @@
 # DiamondMind Master Context
-**Version 2.8** | AI-Driven Baseball Analytics Platform
+
+**Version 2.9** | AI-Driven Baseball Analytics Platform
 
 ---
 
 ## 📋 Table of Contents
 
 1. [Engagement Protocol](#1-engagement-protocol)
-2. [Project Identity & Stack](#2-project-identity--stack)
+2. [Project Identity &amp; Stack](#2-project-identity--stack)
 3. [Tribal Knowledge](#3-tribal-knowledge)
-4. [Configuration & Wiring](#4-configuration--wiring)
+4. [Configuration &amp; Wiring](#4-configuration--wiring)
 5. [Deployment Manual](#5-deployment-manual)
 6. [Local Development](#6-local-development)
 7. [Project Structure Mapping](#7-project-structure-mapping)
 8. [API Contracts](#8-api-contracts)
 9. [Data Flow Architecture](#9-data-flow-architecture)
 10. [Error Handling](#10-error-handling)
-11. [Storage & Persistence](#11-storage--persistence)
-12. [Authentication & Security](#12-authentication--security)
-13. [Performance & Constraints](#13-performance--constraints)
+11. [Storage &amp; Persistence](#11-storage--persistence)
+12. [Authentication &amp; Security](#12-authentication--security)
+13. [Performance &amp; Constraints](#13-performance--constraints)
 14. [Testing Strategy](#14-testing-strategy)
 15. [Dependency Versions](#15-dependency-versions)
 16. [Additional Configuration Files](#16-additional-configuration-files)
@@ -26,6 +27,7 @@
 ---
 
 ## 1. Engagement Protocol
+
 ### AI Instructions for Development Sessions
 
 ### 🔄 Code Sync Rule
@@ -33,14 +35,18 @@
 > **I (The AI) start this session with zero knowledge of your local file contents.**
 
 #### The "First Touch" Rule
+
 Before modifying a file for the first time in this session, I **MUST** ask you to paste its current content.
 
 #### State Retention
+
 Once you provide the code, I will maintain its state in my context. I will only ask for it again if:
+
 - We have drifted significantly
 - You modified it externally
 
 #### Core Principles
+
 - ❌ **No Assumptions**: Never generate full file replacements without seeing the source code
 - 📝 **Log Preservation**: Preserve existing logging statements unless they contradict new logic
 - 🗺️ **Project Map Required**: If `project_map.txt` hasn't been provided, ask for it before making file-related changes
@@ -74,26 +80,27 @@ At the end of every JIRA Story or major bug fix, run this prompt:
 
 ## 2. Project Identity & Stack
 
-**Name:** DiamondMind  
-**Goal:** AI-driven Baseball Analytics (Mobile Video Analysis)  
-**Repo Type:** Monorepo (Windows Environment)  
+**Name:** DiamondMind
+**Goal:** AI-driven Baseball Analytics (Mobile Video Analysis)
+**Repo Type:** Monorepo (Windows Environment)
 **Architecture:** Microservices
 
 ### 🏗️ System Architecture
 
 We split the backend to prevent memory crashes on the Free Tier and to isolate heavy dependencies.
 
-| Service | Role | Tech Stack | Location |
-|---------|------|------------|----------|
-| **Mobile App** | Client | React Native (Expo SDK 52) | `diamondmind-mobile/` |
-| **API Gateway** | Orchestrator | Python FastAPI (Native) | `backend/` |
-| **AI Worker** | Compute Engine | Python 3.12 + MediaPipe (Docker) | `ai-service/` |
+| Service               | Role           | Tech Stack                       | Location                |
+| --------------------- | -------------- | -------------------------------- | ----------------------- |
+| **Mobile App**  | Client         | React Native (Expo SDK 52)       | `diamondmind-mobile/` |
+| **API Gateway** | Orchestrator   | Python FastAPI (Native)          | `backend/`            |
+| **AI Worker**   | Compute Engine | Python 3.12 + MediaPipe (Docker) | `ai-service/`         |
 
 ### 📁 Directory Structure
 
 **Required File:** `project_map.txt`
 
 This context document references a separate file containing the complete project structure. If you don't have it:
+
 1. Generate it using the script in [Section 7](#7-project-structure-mapping)
 2. Provide it to the AI for proper file organization understanding
 3. Keep it updated when major structural changes occur
@@ -101,6 +108,7 @@ This context document references a separate file containing the complete project
 ---
 
 ## 3. Tribal Knowledge
+
 ### ⚠️ Critical Fixes (Do Not Refactor Without Understanding History)
 
 These are non-standard implementations required to make the system work.
@@ -114,6 +122,7 @@ These are non-standard implementations required to make the system work.
 **The Fix:** Use the legacy sub-package and integer constants.
 
 **✅ Required Code Pattern:**
+
 ```javascript
 import * as FileSystem from 'expo-file-system/legacy'; // <--- MUST be legacy
 // ...
@@ -147,6 +156,7 @@ uploadType: 1, // <--- MUST be Integer 1 (Multipart), NOT the Enum
 **The Fix:** The AI service **MUST** return landmarks as an array indexed 0-32, matching MediaPipe's landmark order.
 
 **✅ CORRECT Pattern:**
+
 ```python
 # Build landmarks as an array
 landmarks_array = []
@@ -160,6 +170,7 @@ for landmark in results.pose_landmarks.landmark:
 ```
 
 **❌ WRONG Pattern:**
+
 ```python
 # Do NOT use named keys
 landmarks_dict = {
@@ -170,7 +181,7 @@ landmarks_dict = {
 
 ---
 
-### E. The "Single Source of Truth" Config (DM-41)
+### E. The "Single Source of Truth" Config
 
 **Problem:** URLs were hardcoded in multiple files across the mobile app, making updates error-prone and causing silent failures.
 
@@ -187,6 +198,7 @@ landmarks_dict = {
 **The Fix:** Rely entirely on the `useVideoPlayer` hook's internal logic.
 
 **✅ Required Code Pattern:**
+
 ```javascript
 // Let the hook handle it
 const player = useVideoPlayer(videoUri, (p) => {
@@ -201,14 +213,28 @@ setVideoUri(newUri); // The hook detects this change automatically
 ### G. AI Service Dependencies (Python 3.12 & OpenCV)
 
 **Problems:**
+
 - `mediapipe < 0.10.13` fails to install on Python 3.12
 - Installing both `opencv-python` and `opencv-python-headless` causes namespace collisions
 - `pip` running as root in Docker throws warnings
 
 **The Fix:**
+
 - **MediaPipe:** Must be `>=0.10.14`
 - **OpenCV:** Must strictly be `opencv-python-headless` (remove the full version)
 - **Docker:** Add `ENV PIP_ROOT_USER_ACTION=ignore` to suppress warnings
+
+---
+
+### H. Debugging Slow Uploads (The "10-Minute" Rule)
+
+**Problem:** Larger video files or slow connections were hitting the 2-minute default timeout.
+
+**The Fix:**
+
+- **Mobile (`UploadService.js`):** Timeout increased to **600000ms (10 minutes)**.
+- **Backend (`main.py`):** HTTPX Client timeout increased to **600.0s (10 minutes)**.
+- **Logging:** Detailed timing logs added to both Backend and AI Service to track where delays occur.
 
 ---
 
@@ -218,24 +244,24 @@ setVideoUri(newUri); // The hook detects this change automatically
 
 URLs and environment variables follow a strict hierarchy to avoid mismatches:
 
-| Level | Purpose | Location | Notes |
-|-------|---------|----------|-------|
-| **1. Mobile Config** | Single source for mobile app | `diamondmind-mobile/src/config.js` | ⚠️ **UPDATE THIS FIRST** |
-| **2. AI Service Config** | Backend URL for progress reporting | `ai-service/pose_engine.py` | Has env var override via `BACKEND_URL` |
-| **3. Render Dashboard** | Service-to-service URLs | Render.com Environment Variables | Set `AI_SERVICE_URL` here |
-| **4. Local Scripts** | JIRA Automation | `backend/.env` | Used by `sync_jira.py` |
+| Level                          | Purpose                            | Location                             | Notes                                    |
+| ------------------------------ | ---------------------------------- | ------------------------------------ | ---------------------------------------- |
+| **1. Mobile Config**     | Single source for mobile app       | `diamondmind-mobile/src/config.js` | ⚠️**UPDATE THIS FIRST**          |
+| **2. AI Service Config** | Backend URL for progress reporting | `ai-service/pose_engine.py`        | Has env var override via `BACKEND_URL` |
+| **3. Render Dashboard**  | Service-to-service URLs            | Render.com Environment Variables     | Set `AI_SERVICE_URL` here              |
+| **4. Local Scripts**     | JIRA Automation                    | `backend/.env`                     | Used by `sync_jira.py`                 |
 
 ---
 
 ### 🌐 Current Live Values
 
-| Variable | Current Value | Used By | Location(s) |
-|----------|---------------|---------|-------------|
-| `Config.API_BASE_URL` | `https://diamondmind-backend-yalf.onrender.com` | Mobile → Backend HTTP | `diamondmind-mobile/src/config.js` |
-| `Config.WS_BASE_URL` | `wss://diamondmind-backend-yalf.onrender.com` | Mobile → Backend WebSocket | `diamondmind-mobile/src/config.js` |
-| `BACKEND_URL` | `https://diamondmind-backend-yalf.onrender.com` | AI → Backend progress | `ai-service/pose_engine.py` (env var) |
-| `AI_SERVICE_URL` | `https://dm-ai-service.onrender.com` | Backend → AI | Render Dashboard (Backend) |
-| `PORT` | `8001` | AI Service | `ai-service/Dockerfile` |
+| Variable                | Current Value                                     | Used By                     | Location(s)                             |
+| ----------------------- | ------------------------------------------------- | --------------------------- | --------------------------------------- |
+| `Config.API_BASE_URL` | `https://diamondmind-backend-yalf.onrender.com` | Mobile → Backend HTTP      | `diamondmind-mobile/src/config.js`    |
+| `Config.WS_BASE_URL`  | `wss://diamondmind-backend-yalf.onrender.com`   | Mobile → Backend WebSocket | `diamondmind-mobile/src/config.js`    |
+| `BACKEND_URL`         | `https://diamondmind-backend-yalf.onrender.com` | AI → Backend progress      | `ai-service/pose_engine.py` (env var) |
+| `AI_SERVICE_URL`      | `https://dm-ai-service.onrender.com`            | Backend → AI               | Render Dashboard (Backend)              |
+| `PORT`                | `8001`                                          | AI Service                  | `ai-service/Dockerfile`               |
 
 ---
 
@@ -256,10 +282,11 @@ Follow these exact specifications if redeploying to Render.
 
 ### 🤖 Service 1: AI Worker (Deploy First)
 
-**Type:** Web Service (Docker Runtime)  
+**Type:** Web Service (Docker Runtime)
 **Root Directory:** `ai-service`
 
 **Environment Variables:**
+
 - `PORT=8001` (Required)
 - `BACKEND_URL=https://diamondmind-backend-yalf.onrender.com`
 
@@ -273,17 +300,19 @@ Follow these exact specifications if redeploying to Render.
 
 ### 🌐 Service 2: API Gateway (Deploy Second)
 
-**Type:** Web Service (Native Python 3 Runtime)  
+**Type:** Web Service (Native Python 3 Runtime)
 **Root Directory:** `backend`
 
-**Build Command:** `pip install -r requirements.txt`  
+**Build Command:** `pip install -r requirements.txt`
 **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
 **Environment Variables:**
+
 - `PYTHON_VERSION = 3.11.0` (or 3.12 if upgraded)
 - `AI_SERVICE_URL = https://dm-ai-service.onrender.com`
 
 **Dependencies:** `requirements.txt` MUST include:
+
 - `opencv-python-headless` (to avoid libGL crashes)
 - `httpx`
 
@@ -313,6 +342,7 @@ Run the Mobile App locally while pointing to cloud services.
 Run all services locally for complete debugging control.
 
 #### AI Service (Docker Desktop)
+
 ```bash
 cd ai-service
 docker build -t dm-ai .
@@ -320,6 +350,7 @@ docker run -p 8001:8001 -e BACKEND_URL=http://host.docker.internal:8000 dm-ai
 ```
 
 #### Backend (Uvicorn)
+
 ```bash
 cd backend
 $env:AI_SERVICE_URL="http://localhost:8000"
@@ -327,6 +358,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 #### Mobile App (Update config.js)
+
 ```javascript
 // For local testing
 const LOCAL_IP = "192.168.1.100"; // Your PC's LAN IP
@@ -334,6 +366,7 @@ const LIVE_BACKEND_URL = "localhost:8000"; // or LOCAL_IP + ":8000"
 ```
 
 **Choose based on your environment:**
+
 - **Android Emulator:** Use `10.0.2.2:8000`
 - **Physical Device:** Use your PC's LAN IP (e.g., `192.168.1.100:8000`)
 - **iOS Simulator:** Use `localhost:8000`
@@ -399,7 +432,7 @@ function Show-ContextMap {
             # Print the item
             if ($item.PSIsContainer) {
                 Write-Output "$Indent$prefix$($item.Name)/"
-              
+            
                 # Recurse
                 Print-Tree -CurrentPath $item.FullName -Indent ($Indent + $childIndent) -CurrentDepth ($CurrentDepth + 1)
             } else {
@@ -437,21 +470,21 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 
 ### 🔌 Backend (API Gateway)
 
-| Endpoint | Method | Purpose | Request Format | Response Format |
-|----------|--------|---------|----------------|-----------------|
-| `/api/videos/upload` | POST | Upload video for analysis | Multipart form-data (video file) + `job_id` query param | JSON with pose landmarks |
-| `/ws/progress/{job_id}` | WebSocket | Real-time progress updates | WebSocket connection | JSON: `{"progress": 0-100}` |
-| `/api/jobs/{job_id}/progress` | POST | Receive progress from AI service | JSON: `{"progress": int}` | JSON: `{"status": "ok"}` |
-| `/docs` | GET | FastAPI Swagger documentation | N/A | Interactive API docs |
+| Endpoint                        | Method    | Purpose                          | Request Format                                           | Response Format              |
+| ------------------------------- | --------- | -------------------------------- | -------------------------------------------------------- | ---------------------------- |
+| `/api/videos/upload`          | POST      | Upload video for analysis        | Multipart form-data (video file) +`job_id` query param | JSON with pose landmarks     |
+| `/ws/progress/{job_id}`       | WebSocket | Real-time progress updates       | WebSocket connection                                     | JSON:`{"progress": 0-100}` |
+| `/api/jobs/{job_id}/progress` | POST      | Receive progress from AI service | JSON:`{"progress": int}`                               | JSON:`{"status": "ok"}`    |
+| `/docs`                       | GET       | FastAPI Swagger documentation    | N/A                                                      | Interactive API docs         |
 
 ---
 
 ### 🤖 AI Service (Worker)
 
-| Endpoint | Method | Purpose | Request Format | Response Format |
-|----------|--------|---------|----------------|-----------------|
-| `/analyze/pose` | POST | Process video and extract pose data | Multipart form-data (video file) + `job_id` query param | JSON pose landmarks |
-| `/` | GET | Health check endpoint | N/A | JSON: `{"status": "healthy"}` |
+| Endpoint          | Method | Purpose                             | Request Format                                           | Response Format                |
+| ----------------- | ------ | ----------------------------------- | -------------------------------------------------------- | ------------------------------ |
+| `/analyze/pose` | POST   | Process video and extract pose data | Multipart form-data (video file) +`job_id` query param | JSON pose landmarks            |
+| `/`             | GET    | Health check endpoint               | N/A                                                      | JSON:`{"status": "healthy"}` |
 
 ---
 
@@ -482,6 +515,7 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 ```
 
 **Critical Notes:**
+
 - ✅ `landmarks` MUST be an array, not an object with named keys
 - ✅ Array indices 0-32 follow MediaPipe's landmark ordering
 - ✅ `timestamp` is in milliseconds
@@ -518,21 +552,13 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 ### 📝 Step-by-Step Process
 
 1. **Mobile Upload:** User selects video → `UploadService.js` uploads via `FileSystem.uploadAsync` (legacy) with a unique `job_id`
-
 2. **WebSocket Connection:** Mobile app opens WebSocket connection to `/ws/progress/{job_id}` using `Config.WS_BASE_URL`
-
 3. **Backend Receives:** Streams video chunks to AI service using `httpx` generator without loading to memory
-
 4. **AI Processing:** MediaPipe extracts pose landmarks from each frame
-
 5. **Progress Updates:** AI service POSTs progress to backend every 10 frames using `BACKEND_URL`
-
 6. **Progress Broadcast:** Backend broadcasts progress via WebSocket to mobile app
-
 7. **AI Response:** Returns JSON with landmark coordinates as an array
-
 8. **Backend Relay:** Forwards JSON response back to mobile app
-
 9. **Mobile Rendering:** Overlays skeleton on video using pose data, syncing with video playback
 
 ---
@@ -540,10 +566,12 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 ### 📊 Data Formats
 
 **Video Input:**
+
 - **Tested Size:** Up to ~50MB
-- **Larger files:** May hit timeout limits
+- **Larger files:** May hit timeout limits (10 mins max)
 
 **Pose Data:**
+
 - **Format:** JSON skeleton data flows back: AI → Backend → Mobile
 - **Structure:** Array of frames, each containing `timestamp` and `landmarks` array
 - **Landmarks:** 33-element array (indices 0-32) with `x`, `y`, `z`, `visibility` per landmark
@@ -554,40 +582,41 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 
 ### 📱 Mobile App Error Patterns
 
-| Error Type | Cause | User Message | Action |
-|------------|-------|--------------|--------|
-| `AxiosError: Network Error` | Cannot reach backend | "Unable to connect to server" | Check `Config.API_BASE_URL` in `config.js` |
-| `Error: timeout` | Service cold start (>60s) | "Server is waking up, please try again" | Visit `/docs` endpoint to wake services |
-| `Call to function 'VideoPlayer.play' rejected` | Race condition in Expo Video | N/A | Use `useVideoPlayer` hook, do not call `p.play()` manually |
-| Black Bar at bottom (LogBox) | `console.error` usage in dev | N/A | Use `console.log` for handled errors |
-| `TypeError: undefined is not an object` | Using Enum instead of Integer | N/A | Must use `uploadType: 1` (integer) |
-| WebSocket connection failure | Wrong WebSocket URL | Progress bar stuck at 0% | Verify `Config.WS_BASE_URL` matches backend |
+| Error Type                                       | Cause                             | User Message                         | Action                                                         |
+| ------------------------------------------------ | --------------------------------- | ------------------------------------ | -------------------------------------------------------------- |
+| `AxiosError: Network Error`                    | Cannot reach backend              | "Unable to connect to server"        | Check `Config.API_BASE_URL` in `config.js`                 |
+| `Error: timeout`                               | Processing > 10m or Service sleep | "Server is waking up..." or "Timout" | Visit `/docs` endpoint to wake services. Retry.              |
+| `Call to function 'VideoPlayer.play' rejected` | Race condition in Expo Video      | N/A                                  | Use `useVideoPlayer` hook, do not call `p.play()` manually |
+| Black Bar at bottom (LogBox)                     | `console.error` usage in dev    | N/A                                  | Use `console.log` for handled errors                         |
+| `TypeError: undefined is not an object`        | Using Enum instead of Integer     | N/A                                  | Must use `uploadType: 1` (integer)                           |
+| WebSocket connection failure                     | Wrong WebSocket URL               | Progress bar stuck at 0%             | Verify `Config.WS_BASE_URL` matches backend                  |
 
 ---
 
 ### 🖥️ Backend Error Patterns
 
-| Error Type | Cause | Solution |
-|------------|-------|----------|
-| `ModuleNotFoundError: cv2` | Missing OpenCV | Add `opencv-python-headless` to `requirements.txt` |
-| Connection Refused | Cannot reach AI service | Verify `AI_SERVICE_URL` in Render Backend settings |
-| WebSocket disconnects | Long processing time | Normal - WebSocket closes after upload completes |
+| Error Type                   | Cause                   | Solution                                               |
+| ---------------------------- | ----------------------- | ------------------------------------------------------ |
+| `ModuleNotFoundError: cv2` | Missing OpenCV          | Add `opencv-python-headless` to `requirements.txt` |
+| Connection Refused           | Cannot reach AI service | Verify `AI_SERVICE_URL` in Render Backend settings   |
+| WebSocket disconnects        | Long processing time    | Normal - WebSocket closes after upload completes       |
+| `httpx.ReadTimeout`        | AI Service > 10 minutes | Video too long or AI Service hung. Check logs.         |
 
 ---
 
 ### 🤖 AI Service Error Patterns
 
-| Error Type | Cause | Solution |
-|------------|-------|----------|
-| No person detected | Poor video quality, lighting issues | Log warning with detection stats, continue processing |
-| Progress reporting fails | Backend unreachable or wrong URL | Silent failure - processing continues. Check `BACKEND_URL` env var |
-| pip permission denied | Running as root in Docker | Add `ENV PIP_ROOT_USER_ACTION=ignore` to Dockerfile |
+| Error Type               | Cause                               | Solution                                                             |
+| ------------------------ | ----------------------------------- | -------------------------------------------------------------------- |
+| No person detected       | Poor video quality, lighting issues | Log warning with detection stats, continue processing                |
+| Progress reporting fails | Backend unreachable or wrong URL    | Silent failure - processing continues. Check `BACKEND_URL` env var |
+| pip permission denied    | Running as root in Docker           | Add `ENV PIP_ROOT_USER_ACTION=ignore` to Dockerfile                |
 
 ---
 
 ### 🔄 Retry Strategy
 
-- **Mobile Client Timeout:** 60 seconds
+- **Mobile Client Timeout:** 600 seconds (10 minutes)
 - **Cold Start Protocol:** Manually visit `/docs` on Backend and `/` on AI Service before testing
 - **Progress Updates:** Fire-and-forget (failures don't block processing)
 
@@ -632,21 +661,21 @@ Configured in both `backend/app/main.py` and `ai-service/main.py` with `allow_or
 ### ⏱️ Processing Times
 
 - **Cold Start Time:** ~60 seconds (Render Free Tier)
-- **Client Timeout:** 60 seconds
+- **Client Timeout:** 600 seconds (10 minutes)
 - **Progress Update Interval:** Every 10 frames
 
 ### 💾 Resource Limits
 
-| Service | RAM Limit | Notes |
-|---------|-----------|-------|
-| Backend | 512MB (Hard Limit) | Render Free Tier |
+| Service   | RAM Limit           | Notes            |
+| --------- | ------------------- | ---------------- |
+| Backend   | 512MB (Hard Limit)  | Render Free Tier |
 | AI Worker | [Render allocation] | Docker container |
-| Mobile | Device-dependent | Local processing |
+| Mobile    | Device-dependent    | Local processing |
 
 ### 🎥 Video Constraints
 
-- **Tested Size:** Up to ~50MB
-- **Larger Files:** May hit timeout limits
+- **Tested Size:** Up to ~100MB
+- **Larger Files:** May hit timeout limits (10 mins)
 - **Supported Formats:** MP4, MOV, AVI (validated by backend)
 
 ### 🤖 AI Model Settings
@@ -662,6 +691,7 @@ Configured in both `backend/app/main.py` and `ai-service/main.py` with `allow_or
 ### 🏥 Service Health Checks
 
 **Backend:**
+
 ```bash
 # Test backend is awake
 curl https://diamondmind-backend-yalf.onrender.com/docs
@@ -669,6 +699,7 @@ curl https://diamondmind-backend-yalf.onrender.com/docs
 ```
 
 **AI Service:**
+
 ```bash
 # Test AI service is awake
 curl https://dm-ai-service.onrender.com/
@@ -689,15 +720,15 @@ curl https://dm-ai-service.onrender.com/
 ### 📋 Console Log Checkpoints
 
 **Expected logs during successful upload:**
+
 ```
-📤 Starting upload for Job ID: [id]
-📡 WebSocket connecting to job: [id]
-✅ WebSocket connected
-📊 Progress update: 10%
-📊 Progress update: 20%
+Backend: 🚀 Sending request to AI Service for Job [id]
 ...
-📊 Progress update: 100%
-✅ Analysis complete: { totalFrames: X, framesWithPerson: Y }
+AI Service: ▶️ Starting Analysis for Job: [id]
+AI Service:    ...Processed 50/300 frames
+...
+AI Service: 🏁 Analysis Complete in 25.4s
+Backend: ✅ AI Service responded in 25.5s with status 200
 ```
 
 ---
@@ -761,31 +792,35 @@ matplotlib
 
 When updating URLs or deploying to new environments, check these locations:
 
-| File/Location | What to Check | Notes |
-|---------------|---------------|-------|
-| `backend/render.yaml` | Environment variable definitions | If using Blueprints for IaC |
-| `backend/.env` | Local development URLs | Not committed to git |
-| `ai-service/.env` | Local `BACKEND_URL` override | Not committed to git |
-| `docker-compose.yml` | Service URLs for local testing | If you create one |
-| Integration test files | Any test scripts with URLs | Check `/backend/tests/` if exists |
-| GitHub Actions / CI | Workflow files may have URLs | Check `.github/workflows/` if exists |
+| File/Location           | What to Check                    | Notes                                  |
+| ----------------------- | -------------------------------- | -------------------------------------- |
+| `backend/render.yaml` | Environment variable definitions | If using Blueprints for IaC            |
+| `backend/.env`        | Local development URLs           | Not committed to git                   |
+| `ai-service/.env`     | Local `BACKEND_URL` override   | Not committed to git                   |
+| `docker-compose.yml`  | Service URLs for local testing   | If you create one                      |
+| Integration test files  | Any test scripts with URLs       | Check `/backend/tests/` if exists    |
+| GitHub Actions / CI     | Workflow files may have URLs     | Check `.github/workflows/` if exists |
 
 ---
 
 ### ✅ Environment Variables Checklist
 
 **Mobile App:**
+
 - ✅ `diamondmind-mobile/src/config.js` - Update `LIVE_BACKEND_URL`
 
 **AI Service (Render Dashboard):**
+
 - ✅ `PORT = 8001`
 - ✅ `BACKEND_URL = https://diamondmind-backend-yalf.onrender.com` (optional override)
 
 **Backend (Render Dashboard):**
+
 - ✅ `PYTHON_VERSION = 3.11.0`
 - ✅ `AI_SERVICE_URL = https://dm-ai-service.onrender.com`
 
 **JIRA Automation (Local .env):**
+
 - ✅ `JIRA_URL = https://[your-domain].atlassian.net`
 - ✅ `JIRA_EMAIL = [email]`
 - ✅ `JIRA_API_TOKEN = [token]`
@@ -797,7 +832,8 @@ When updating URLs or deploying to new environments, check these locations:
 
 ### 📝 Scripts
 
-**Location:** `backend/scripts/`  
+**Location:** `backend/scripts/`
+
 **Files:** `sync_jira.py`, `stories.json`
 
 ---
@@ -807,11 +843,13 @@ When updating URLs or deploying to new environments, check these locations:
 **1. Define Stories:** Edit `stories.json` with the JSON format
 
 **2. Create/Update:** Run the script to push changes to JIRA
+
 ```bash
 python backend/scripts/sync_jira.py create
 ```
 
 **3. Transition:** Move tickets (optional)
+
 ```bash
 python backend/scripts/sync_jira.py [TICKET-ID] Done
 ```
@@ -837,9 +875,9 @@ Requires `jira` and `python-dotenv` packages.
 - 🚨 **CRITICAL:** Use `useVideoPlayer` hook correctly; avoid manual play calls that race with state updates
 - 🚨 **CRITICAL:** AI Service requires `opencv-python-headless` and `mediapipe>=0.10.14` for Python 3.12 compatibility
 - ⚠️ WebSocket URL must exactly match the backend URL (common source of progress bar issues)
-- 📊 Monitor console logs during development to verify data flow and catch issues early
+- 📊 Monitor console logs in Backend & AI Service for exact timing breakdowns
 - 🔄 When updating URLs, always update `config.js` **FIRST**, then verify backend environment variables match
 
 ---
 
-**End of Document** | Last Updated: v2.8
+**End of Document** | Last Updated: v2.9

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pose_engine import PoseExtractor
 import traceback
+import time
 
 app = FastAPI(title="DiamondMind AI Service")
 
@@ -48,11 +49,13 @@ async def analyze(file: UploadFile = File(...), job_id: str = None):
             shutil.copyfileobj(file.file, buffer)
         
         print(f"▶️ Starting Analysis for Job: {job_id}")
+        start_time = time.time()
 
         # Pass TEMP_DIR so the engine knows where to save the output video
         pose_data = ai_engine.process_video(temp_path, job_id=job_id, output_dir=TEMP_DIR)
         
-        print(f"🏁 Analysis Complete. Video ready: {pose_data.get('video_filename')}")
+        duration = time.time() - start_time
+        print(f"🏁 Analysis Complete in {duration:.2f}s. Video ready: {pose_data.get('video_filename')}")
         return pose_data
 
     except Exception as e:
