@@ -35,14 +35,18 @@ const BatTrailOverlay = ({
         offsetY = 0;
     }
 
-    // Extract bat positions from frames (up to current frame for progressive trail)
+    // Extract ALL bat positions from frames (show complete trail)
     const batPositions = frames
-        .slice(0, currentFrameIndex + 1)
         .map(frame => frame.bat_position)
         .filter(pos => pos !== null && pos !== undefined);
 
-    if (batPositions.length < 2) {
-        // Need at least 2 points to draw a trail
+    // DEBUG: Log bat detection stats (only once)
+    if (currentFrameIndex === 0 && batPositions.length > 0) {
+        console.log(`🏏 Bat Trail: ${batPositions.length}/${frames.length} frames (${((batPositions.length / frames.length) * 100).toFixed(1)}%)`);
+    }
+
+    if (batPositions.length === 0) {
+        // No bat positions detected at all
         return null;
     }
 
@@ -63,24 +67,38 @@ const BatTrailOverlay = ({
                 width="100%"
                 viewBox={`0 0 ${containerWidth} ${containerHeight}`}
             >
-                {/* Bat trail (polyline) */}
-                <Polyline
-                    points={points}
-                    fill="none"
-                    stroke="#FFD700"
-                    strokeWidth="3"
-                    strokeOpacity="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
+                {/* Bat trail (polyline) - show if we have at least 2 points */}
+                {batPositions.length >= 2 && (
+                    <Polyline
+                        points={points}
+                        fill="none"
+                        stroke="#FFD700"
+                        strokeWidth="4"
+                        strokeOpacity="0.9"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                )}
 
-                {/* Current bat position (highlighted circle) */}
+                {/* Draw all bat positions as circles for visibility */}
+                {batPositions.map((pos, index) => (
+                    <Circle
+                        key={index}
+                        cx={offsetX + (pos.x * displayWidth)}
+                        cy={offsetY + (pos.y * displayHeight)}
+                        r="6"
+                        fill="#FFD700"
+                        opacity="0.6"
+                    />
+                ))}
+
+                {/* Current bat position (highlighted - larger and red) */}
                 {currentBatPos && (
                     <Circle
                         cx={offsetX + (currentBatPos.x * displayWidth)}
                         cy={offsetY + (currentBatPos.y * displayHeight)}
-                        r="8"
-                        fill="#FFD700"
+                        r="12"
+                        fill="#FF0000"
                         opacity="1"
                     />
                 )}
