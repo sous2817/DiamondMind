@@ -19,6 +19,9 @@ Thumbs.db
 # --- LOGS & UPLOADS ---
 *.log
 **/uploads/
+# Exception: Allow specific test videos for AI debugging (prefix with 'test_' or 'bat_tracker')
+!**/uploads/test_*.mp4
+!**/uploads/bat_tracker*.mp4
 **/logs/
 
 # --- FRONTEND (React) ---

@@ -11,31 +11,67 @@
   },
   "stories": [
     {
-      "summary": "Add Toggle Control for Skeleton Overlay Visibility",
+      "summary": "Add Bat Color Selection UI for HSV Detection Configuration",
       "priority": {
         "name": "Medium"
       },
       "details": {
-        "user_story": "As a user, I want to toggle the skeleton overlay on and off during video playback, so I can choose whether to view the pose analysis or just the raw video.",
-        "context": "Currently, the skeleton overlay is always visible when analysis results are available. Users may want to compare their swing with and without the overlay, or simply prefer viewing the raw video without visual annotations.",
+        "user_story": "As a user, I want to select my bat color before uploading a swing video, so that the AI service can accurately detect and track my specific bat type without requiring manual HSV configuration.",
+        "context": "DM-33 implemented color-based bat tracking using HSV ranges configured via environment variables on the server. This requires manual configuration and doesn't allow users to specify their bat color. To improve usability, we need a UI component that lets users select their bat color (black, red, blue, silver, wood) before upload, which will send the appropriate HSV ranges to the AI service for processing.",
         "acceptance_criteria": [
-          "A toggle button/switch is visible in the UI when analysis results are loaded.",
-          "Clicking the toggle hides/shows the skeleton overlay without affecting video playback.",
-          "Toggle state persists during video scrubbing and seeking.",
-          "Overlay visibility preference is maintained when switching between analyzed videos in the same session.",
-          "Toggle is disabled or hidden when no analysis results are available."
+          "Bat color selector UI appears before video upload (on empty state screen)",
+          "Predefined color options: Black, Red, Blue, Silver, Wood (Brown)",
+          "Selected color is visually indicated (highlighted/checked)",
+          "HSV ranges are sent to AI service as part of upload request",
+          "Backend passes HSV parameters to AI service during video processing",
+          "Default selection is 'Black' (most common aluminum bat color)",
+          "Color selection persists during app session but resets on app restart",
+          "UI is accessible and follows app design language"
         ],
         "technical_details": [
-          "Add a boolean state variable (e.g., `showOverlay`) in App.js.", 
-          "Conditionally render the SkeletonOverlay component based on this state.",
-          "Add a toggle button (likely near playback controls) that updates the state.",
-          "Ensure the toggle doesn't trigger unnecessary re-renders of the video player."
+          "Mobile App Changes (App.js):",
+          "- Add batColor state variable (default: 'black')",
+          "- Create bat color selector component in upload card",
+          "- Display color options as chips/buttons with icons",
+          "- Pass batColor to UploadService.uploadSwingVideo()",
+          "",
+          "Mobile App Changes (UploadService.js):",
+          "- Accept batColor parameter in uploadSwingVideo()",
+          "- Convert bat color to HSV ranges using preset mapping",
+          "- HSV_PRESETS object with black, red, blue, silver, wood mappings",
+          "- Send HSV ranges as query parameters or request body to backend",
+          "",
+          "Backend Changes (main.py):",
+          "- Update /api/videos/upload endpoint to accept HSV parameters",
+          "- Accept bat_hsv_lower and bat_hsv_upper as optional parameters",
+          "- Pass HSV values to AI service in the multipart request or as headers",
+          "- Maintain backward compatibility (use defaults if not provided)",
+          "",
+          "AI Service Changes (main.py):",
+          "- Update /analyze/pose endpoint to accept HSV parameters",
+          "- Accept bat_hsv_lower and bat_hsv_upper from request",
+          "- Pass HSV values to PoseExtractor.process_video()",
+          "- Override environment variable defaults with request parameters",
+          "",
+          "AI Service Changes (pose_engine.py):",
+          "- Update process_video() to accept optional bat_hsv_lower and bat_hsv_upper parameters",
+          "- Use provided HSV ranges instead of global BAT_HSV_LOWER/BAT_HSV_UPPER",
+          "- Maintain backward compatibility with environment variables",
+          "",
+          "UI Design:",
+          "- Color selector appears below 'Analyze a Swing' text in upload card",
+          "- Horizontal scrollable row of color chips",
+          "- Each chip shows: bat icon + color name + color indicator dot",
+          "- Selected chip has accent border and background tint",
+          "- Compact design (doesn't overwhelm the upload card)"
         ],
         "edge_cases": [
-          "Toggle should be disabled during video upload/processing (no results yet).",
-          "Switching videos should reset or maintain toggle state (decide on UX preference).",
-          "Toggle state should not interfere with overlay synchronization logic.",
-          "Consider accessibility: toggle should have proper ARIA labels for screen readers."
+          "Invalid HSV Values: Backend should validate HSV ranges are within [0-180] for H, [0-255] for S/V",
+          "Network Failure During Upload: Bat color selection should be retained if user retries upload",
+          "Multiple Bat Colors in Video: User must select dominant/primary bat color (future: support multiple selections)",
+          "Custom Colors: Future enhancement - allow users to create custom HSV ranges via sliders",
+          "Accessibility: Color chips should have text labels, not just color indicators, for colorblind users",
+          "Backward Compatibility: AI service should still work with old mobile app versions that don't send HSV parameters"
         ]
       }
     }

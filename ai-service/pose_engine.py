@@ -50,66 +50,187 @@ class PoseExtractor:
 
     def _detect_bat_hsv(self, frame, hand_landmarks=None):
         """
-        Detects bat position using HSV color-based tracking.
+        Detects bat position using hand-anchored approach.
         Returns normalized (x, y) coordinates or None if bat not detected.
-        """
-        # Convert BGR to HSV
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         
-        # Create color mask
+        Strategy:
+        1. Use hand landmarks as anchor points (most reliable)
+        2. Search for elongated objects extending from hands
+        3. Estimate bat barrel position along the extension vector
+        """
+        h, w = frame.shape[:2]
+        
+        # If no hand landmarks, fall back to basic color detection
+        if not hand_landmarks:
+            return self._detect_bat_color_only(frame)
+        
+        # Get both hand positions
+        left_hand = hand_landmarks.landmark[15]   # Left wrist
+        right_hand = hand_landmarks.landmark[16]  # Right wrist
+        
+        left_x, left_y = int(left_hand.x * w), int(left_hand.y * h)
+        right_x, right_y = int(right_hand.x * w), int(right_hand.y * h)
+        
+        # Calculate midpoint between hands (grip position)
+        grip_x = (left_x + right_x) // 2
+        grip_y = (left_y + right_y) // 2
+        
+        # Create search region around hands (expanded area)
+        search_radius = int(max(w, h) * 0.4)  # 40% of frame dimension
+        x1 = max(0, grip_x - search_radius)
+        y1 = max(0, grip_y - search_radius)
+        x2 = min(w, grip_x + search_radius)
+        y2 = min(h, grip_y + search_radius)
+        
+        # Extract search region
+        search_region = frame[y1:y2, x1:x2]
+        
+        if search_region.size == 0:
+            return None
+        
+        # Convert to HSV and create mask
+        hsv = cv2.cvtColor(search_region, cv2.COLOR_BGR2HSV)
         lower_bound = np.array(BAT_HSV_LOWER)
         upper_bound = np.array(BAT_HSV_UPPER)
         mask = cv2.inRange(hsv, lower_bound, upper_bound)
         
-        # Apply morphological operations to reduce noise
+        # Apply morphological operations
         kernel = np.ones((5, 5), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         
-        # Find contours
+        # Find contours in search region
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         if not contours:
             return None
         
-        # Filter by minimum area (avoid noise)
-        min_area = 500  # pixels
-        valid_contours = [c for c in contours if cv2.contourArea(c) > min_area]
+        # Filter for elongated objects (bats are long and thin)
+        min_area = 800
+        max_area = (x2 - x1) * (y2 - y1) * 0.15  # Max 15% of search region
+        
+        bat_candidates = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < min_area or area > max_area:
+                continue
+            
+            # Check aspect ratio
+            rect = cv2.minAreaRect(c)
+            box_width, box_height = rect[1]
+            if box_width == 0 or box_height == 0:
+                continue
+            
+            aspect_ratio = max(box_width, box_height) / min(box_width, box_height)
+            
+            # Bats should be elongated (aspect ratio > 3)
+            if aspect_ratio > 3.0:
+                # Calculate distance from grip point
+                M = cv2.moments(c)
+                if M["m00"] != 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                    
+                    # Convert to frame coordinates
+                    cx_frame = cx + x1
+                    cy_frame = cy + y1
+                    
+                    dist_from_grip = ((cx_frame - grip_x) ** 2 + (cy_frame - grip_y) ** 2) ** 0.5
+                    
+                    bat_candidates.append({
+                        'contour': c,
+                        'centroid': (cx_frame, cy_frame),
+                        'distance': dist_from_grip,
+                        'aspect_ratio': aspect_ratio
+                    })
+        
+        if not bat_candidates:
+            return None
+        
+        # Select best candidate: prefer elongated objects near hands
+        # Weight: closer to hands = better, higher aspect ratio = better
+        def score_candidate(candidate):
+            # Normalize distance (closer = higher score)
+            max_dist = search_radius
+            dist_score = 1.0 - (candidate['distance'] / max_dist)
+            
+            # Normalize aspect ratio (more elongated = higher score)
+            aspect_score = min(candidate['aspect_ratio'] / 10.0, 1.0)
+            
+            # Combined score (distance weighted more heavily)
+            return (dist_score * 0.7) + (aspect_score * 0.3)
+        
+        best_candidate = max(bat_candidates, key=score_candidate)
+        cx_frame, cy_frame = best_candidate['centroid']
+        
+        # Estimate bat barrel position (extend from grip along bat direction)
+        # The centroid is roughly mid-bat, barrel is farther from hands
+        dx = cx_frame - grip_x
+        dy = cy_frame - grip_y
+        
+        # Extend 1.5x to approximate barrel position
+        barrel_x = grip_x + int(dx * 1.5)
+        barrel_y = grip_y + int(dy * 1.5)
+        
+        # Clamp to frame boundaries
+        barrel_x = max(0, min(w - 1, barrel_x))
+        barrel_y = max(0, min(h - 1, barrel_y))
+        
+        # Return normalized coordinates
+        return {
+            "x": round(barrel_x / w, 4),
+            "y": round(barrel_y / h, 4)
+        }
+    
+    def _detect_bat_color_only(self, frame):
+        """
+        Fallback: Basic color detection without hand landmarks.
+        Used when pose detection fails.
+        """
+        h, w = frame.shape[:2]
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        
+        lower_bound = np.array(BAT_HSV_LOWER)
+        upper_bound = np.array(BAT_HSV_UPPER)
+        mask = cv2.inRange(hsv, lower_bound, upper_bound)
+        
+        kernel = np.ones((5, 5), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return None
+        
+        # Find largest elongated contour
+        valid_contours = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < 1000:
+                continue
+            
+            rect = cv2.minAreaRect(c)
+            box_width, box_height = rect[1]
+            if box_width == 0 or box_height == 0:
+                continue
+            
+            aspect_ratio = max(box_width, box_height) / min(box_width, box_height)
+            if aspect_ratio > 3.0:
+                valid_contours.append(c)
         
         if not valid_contours:
             return None
         
-        # If hand landmarks available, prefer contours near hands
-        if hand_landmarks:
-            h, w = frame.shape[:2]
-            # Get right hand position (landmark 16)
-            right_hand = hand_landmarks.landmark[16]
-            hand_x, hand_y = int(right_hand.x * w), int(right_hand.y * h)
-            
-            # Find contour closest to hand
-            def distance_to_hand(contour):
-                M = cv2.moments(contour)
-                if M["m00"] == 0:
-                    return float('inf')
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                return ((cx - hand_x) ** 2 + (cy - hand_y) ** 2) ** 0.5
-            
-            bat_contour = min(valid_contours, key=distance_to_hand)
-        else:
-            # Otherwise, use largest contour
-            bat_contour = max(valid_contours, key=cv2.contourArea)
-        
-        # Calculate centroid
+        bat_contour = max(valid_contours, key=cv2.contourArea)
         M = cv2.moments(bat_contour)
+        
         if M["m00"] == 0:
             return None
         
         cx = int(M["m10"] / M["m00"])
         cy = int(M["m01"] / M["m00"])
         
-        # Normalize to 0-1 range
-        h, w = frame.shape[:2]
         return {
             "x": round(cx / w, 4),
             "y": round(cy / h, 4)
