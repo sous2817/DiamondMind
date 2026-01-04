@@ -36,6 +36,8 @@ class PoseExtractor:
             min_detection_confidence=min_detection_confidence,
             min_tracking_confidence=0.5
         )
+        # Temporal smoothing buffer for bat positions (reduces jitter)
+        self.bat_position_buffer = []
 
     def report_progress(self, job_id, progress):
         """Sends a fire-and-forget progress update to the backend."""
@@ -108,11 +110,34 @@ class PoseExtractor:
         barrel_x = max(0, min(w - 1, barrel_x))
         barrel_y = max(0, min(h - 1, barrel_y))
         
+        # Apply temporal smoothing to reduce jitter
+        smoothed_x, smoothed_y = self._smooth_bat_position(barrel_x, barrel_y)
+        
         # Return normalized coordinates
         return {
-            "x": round(barrel_x / w, 4),
-            "y": round(barrel_y / h, 4)
+            "x": round(smoothed_x / w, 4),
+            "y": round(smoothed_y / h, 4)
         }
+    
+    def _smooth_bat_position(self, x, y, buffer_size=5):
+        """
+        Apply temporal smoothing to bat position using a rolling average.
+        Reduces jitter from frame-to-frame hand position changes.
+        """
+        # Add current position to buffer
+        self.bat_position_buffer.append((x, y))
+        
+        # Keep only last N positions
+        if len(self.bat_position_buffer) > buffer_size:
+            self.bat_position_buffer.pop(0)
+        
+        # Calculate average position
+        if len(self.bat_position_buffer) > 0:
+            avg_x = sum(pos[0] for pos in self.bat_position_buffer) / len(self.bat_position_buffer)
+            avg_y = sum(pos[1] for pos in self.bat_position_buffer) / len(self.bat_position_buffer)
+            return int(avg_x), int(avg_y)
+        
+        return x, y
     
     def _detect_bat_color_only(self, frame):
         """
