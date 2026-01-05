@@ -1,7 +1,15 @@
-from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, ForeignKey, Enum, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import enum
 from .database import Base
+
+class SwingStatus(str, enum.Enum):
+    """Status of swing upload and processing"""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 class User(Base):
     """User model for authentication and ownership of swing data"""
@@ -25,6 +33,15 @@ class Swing(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     filename = Column(String(255))
     video_url = Column(String)  # Future: S3/Supabase Storage URL
+    
+    # DM-56: Status tracking for upload cleanup
+    status = Column(Enum(SwingStatus), nullable=False, default=SwingStatus.PROCESSING, index=True, server_default='processing')
+    error_message = Column(Text, nullable=True)
+    
+    # DM-57: User-friendly metadata
+    title = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

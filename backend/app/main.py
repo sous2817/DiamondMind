@@ -18,7 +18,11 @@ from fastapi import BackgroundTasks
 
 # Database imports
 from app.database import engine, Base, get_db
-from app.models import User, Swing, AnalysisResult
+from app.models import User, Swing, AnalysisResult, SwingStatus
+from app.cleanup import cleanup_orphaned_swings
+
+# Scheduler for cleanup jobs
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 class ConnectionManager:
     def __init__(self):
@@ -60,6 +64,7 @@ class ConnectionManager:
             await self.active_connections[job_id].send_json({"error": clean_msg})
 
 manager = ConnectionManager()
+scheduler = AsyncIOScheduler()
 
 # Database startup event
 @app.on_event("startup")
@@ -68,6 +73,11 @@ async def startup():
     logger.info("🚀 Starting up DiamondMind Backend...")
     Base.metadata.create_all(bind=engine)
     logger.info("✅ Database tables created/verified")
+    
+    # Start cleanup job (runs every hour)
+    scheduler.add_job(cleanup_orphaned_swings, 'interval', hours=1, id='cleanup_swings')
+    scheduler.start()
+    logger.info("🧹 Cleanup job scheduled (runs every hour)")
 
 @app.post("/api/jobs/{job_id}/progress")
 async def receive_progress(job_id: str, data: dict):
@@ -132,17 +142,20 @@ async def login(email: str, db: Session = Depends(get_db)):
 
 @app.get("/api/users/{user_id}/swings")
 async def get_user_swings(user_id: int, db: Session = Depends(get_db)):
-    """Get all swings for a user"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    swings = db.query(Swing).filter(Swing.user_id == user_id).all()
+    """Get all completed swings for a user"""
+    # Only return completed swings (hide pending/processing/failed)
+    swings = db.query(Swing).filter(
+        Swing.user_id == user_id,
+        Swing.status == SwingStatus.COMPLETED
+    ).all()
     return [
         {
             "id": swing.id,
             "filename": swing.filename,
+            "title": swing.title,  # DM-57: Custom title
+            "notes": swing.notes,  # DM-57: User notes
             "video_url": swing.video_url,
+            "status": swing.status.value,  # DM-56: Status tracking
             "created_at": str(swing.created_at),
             "has_analysis": swing.analysis is not None
         }
@@ -234,16 +247,17 @@ async def process_video_background(file_data: bytes, filename: str, content_type
                      from app.database import SessionLocal
                      db = SessionLocal()
                      
-                     # Create Swing record
+                     # Create Swing record with status='processing'
                      swing = Swing(
                          user_id=user_id,
                          filename=filename,
-                         video_url=result.get("download_url")
+                         video_url=result.get("download_url"),
+                         status=SwingStatus.PROCESSING
                      )
                      db.add(swing)
                      db.commit()
                      db.refresh(swing)
-                     print(f"Background: 💾 Saved swing to database (ID: {swing.id})")
+                     print(f"Background: 💾 Saved swing to database (ID: {swing.id}, status=processing)")
                      
                      # Create AnalysisResult record
                      analysis = AnalysisResult(
@@ -256,8 +270,13 @@ async def process_video_background(file_data: bytes, filename: str, content_type
                      )
                      db.add(analysis)
                      db.commit()
+                     
+                     # Update swing status to 'completed'
+                     swing.status = SwingStatus.COMPLETED
+                     db.commit()
                      db.refresh(analysis)
                      print(f"Background: 💾 Saved analysis to database (ID: {analysis.id})")
+                     print(f"Background: ✅ Swing {swing.id} marked as completed")
                      
                      # Add database IDs to result
                      result["swing_id"] = swing.id
@@ -266,6 +285,15 @@ async def process_video_background(file_data: bytes, filename: str, content_type
                      db.close()
                  except Exception as db_error:
                      print(f"Background: ⚠️ Database save failed: {str(db_error)}")
+                     # Mark swing as failed if it was created
+                     try:
+                         if 'swing' in locals() and swing.id:
+                             swing.status = SwingStatus.FAILED
+                             swing.error_message = f"Database error: {str(db_error)[:500]}"
+                             db.commit()
+                             print(f"Background: ❌ Swing {swing.id} marked as failed")
+                     except:
+                         pass
                      # Continue anyway - don't fail the whole request
              
              await manager.send_result(job_id, result)
@@ -278,8 +306,21 @@ async def process_video_background(file_data: bytes, filename: str, content_type
 
     except Exception as e:
         error_str = str(e)[:200] if len(str(e)) > 200 else str(e)
-        print(f"Background Exception: {error_str}")
-        await manager.send_error(job_id, str(e))
+        print(f"Background Error: {error_str}")
+        
+        # Mark swing as failed if it exists
+        if user_id:
+            try:
+                from app.database import SessionLocal
+                db = SessionLocal()
+                # Find the swing by job_id (we'd need to store job_id, or find by recent upload)
+                # For now, just log the error - cleanup job will handle orphaned swings
+                print(f"Background: ⚠️ Upload failed for user {user_id}, cleanup job will remove orphaned records")
+                db.close()
+            except:
+                pass
+        
+        await manager.send_error(job_id, error_str)
     finally:
         # Cleanup temp file
         if temp_path and os.path.exists(temp_path):
