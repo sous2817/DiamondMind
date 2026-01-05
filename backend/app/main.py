@@ -121,6 +121,15 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
     
     return {"id": user.id, "email": user.email, "username": user.username, "created_at": str(user.created_at)}
 
+@app.get("/api/auth/login")
+async def login(email: str, db: Session = Depends(get_db)):
+    """Simple email-based login (no password)"""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"id": user.id, "email": user.email, "username": user.username, "created_at": str(user.created_at)}
+
 @app.get("/api/users/{user_id}/swings")
 async def get_user_swings(user_id: int, db: Session = Depends(get_db)):
     """Get all swings for a user"""
