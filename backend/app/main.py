@@ -122,6 +122,59 @@ app.add_middleware(
 
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8001")
 
+# ========== DIAGNOSTIC ENDPOINT ==========
+
+@app.get("/api/debug/db-status")
+async def debug_db_status(db: Session = Depends(get_db)):
+    """Check database state and migration status"""
+    try:
+        from sqlalchemy import inspect, text
+        
+        inspector = inspect(db.bind)
+        swings_columns = inspector.get_columns('swings')
+        column_names = [col['name'] for col in swings_columns]
+        
+        # Check if new columns exist
+        has_status = 'status' in column_names
+        has_error_message = 'error_message' in column_names
+        has_title = 'title' in column_names
+        has_notes = 'notes' in column_names
+        
+        # Count records
+        user_count = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
+        swing_count = db.execute(text("SELECT COUNT(*) FROM swings")).scalar()
+        
+        # Try to get status breakdown if column exists
+        status_breakdown = {}
+        if has_status:
+            try:
+                result = db.execute(text("SELECT status, COUNT(*) FROM swings GROUP BY status"))
+                status_breakdown = {row[0]: row[1] for row in result}
+            except:
+                status_breakdown = {"error": "Could not query status"}
+        
+        return {
+            "database": "connected",
+            "migration_status": {
+                "status_column": has_status,
+                "error_message_column": has_error_message,
+                "title_column": has_title,
+                "notes_column": has_notes,
+                "all_columns_present": has_status and has_error_message and has_title and has_notes
+            },
+            "record_counts": {
+                "users": user_count,
+                "swings": swing_count
+            },
+            "swing_status_breakdown": status_breakdown if has_status else "status column not yet migrated",
+            "all_columns": column_names
+        }
+    except Exception as e:
+        return {
+            "database": "error",
+            "error": str(e)
+        }
+
 # ========== DATABASE CRUD ENDPOINTS ==========
 
 @app.post("/api/users", response_model=dict)
