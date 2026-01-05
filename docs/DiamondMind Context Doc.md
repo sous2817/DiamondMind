@@ -333,6 +333,69 @@ if message.strip().startswith("<!DOCTYPE") or message.strip().startswith("<html"
 
 ---
 
+### L. Bat Tracking Implementation (Geometric Approach)
+
+**Problem:** Initial attempts used HSV color detection to find the bat, but this had critical flaws:
+- Only 4-5% detection rate (detected wrong objects like pants, shadows, background)
+- Required bat-specific color calibration
+- Unreliable across different lighting conditions
+- Massive 349k pixel false positives
+
+**The Solution:** **Geometric bat tracking** using only hand landmarks (no color detection).
+
+**✅ Required Approach:**
+
+```python
+# ai-service/pose_engine.py - _detect_bat_hsv()
+
+# 1. Get hand positions (landmarks 15=left wrist, 16=right wrist)
+left_x, left_y = int(left_wrist.x * w), int(left_wrist.y * h)
+right_x, right_y = int(right_wrist.x * w), int(right_wrist.y * h)
+
+# 2. Calculate grip position (midpoint)
+grip_x = (left_x + right_x) // 2
+grip_y = (left_y + right_y) // 2
+
+# 3. Calculate bat direction vector
+bat_dx = right_x - left_x
+bat_dy = right_y - left_y
+hand_distance = np.sqrt(bat_dx**2 + bat_dy**2)
+
+# 4. Extend 2.5x along bat direction to estimate barrel
+extension = hand_distance * 2.5
+barrel_x = grip_x + int((bat_dx / hand_distance) * extension)
+barrel_y = grip_y + int((bat_dy / hand_distance) * extension)
+
+# 5. Apply temporal smoothing (rolling average over 5 frames)
+smoothed_x, smoothed_y = self._smooth_bat_position(barrel_x, barrel_y)
+```
+
+**Key Benefits:**
+- **72%+ detection rate** (works whenever pose is detected)
+- **Works with any bat color** (no HSV calibration needed)
+- **Bat always starts at hands** (accurate grip position)
+- **Smooth trail** (temporal averaging reduces jitter)
+- **Fast** (no contour processing, no HSV conversion)
+
+**Temporal Smoothing:**
+- Maintains a buffer of the last 5 bat positions
+- Returns the rolling average to reduce frame-to-frame jitter
+- Buffer is instance-level (`self.bat_position_buffer`) in `PoseExtractor`
+
+**Mobile Visualization:**
+- `BatTrailOverlay.js` renders golden dots (6px) for all bat positions
+- Red circle (12px) highlights current bat position
+- Shows complete trail (not progressive) for full swing visualization
+- Console logs detection rate: `🏏 Bat Trail: X/Y frames (Z%)`
+
+**Important Notes:**
+- Bat position changes throughout swing (this is correct behavior)
+- Minimum hand distance: 20 pixels (prevents division by zero)
+- Extension multiplier: 2.5x (typical bat ~34", hands ~12" apart)
+- Coordinates are clamped to frame boundaries after smoothing
+
+---
+
 ## 4. Configuration & Wiring
 
 ### 🔧 Configuration Hierarchy
