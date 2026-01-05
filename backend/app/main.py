@@ -163,19 +163,25 @@ async def login(email: str, db: Session = Depends(get_db)):
 @app.get("/api/users/{user_id}/swings")
 async def get_user_swings(user_id: int, db: Session = Depends(get_db)):
     """Get all completed swings for a user"""
-    # Only return completed swings (hide pending/processing/failed)
-    swings = db.query(Swing).filter(
-        Swing.user_id == user_id,
-        Swing.status == SwingStatus.COMPLETED
-    ).all()
+    try:
+        # Try to filter by status (if column exists)
+        swings = db.query(Swing).filter(
+            Swing.user_id == user_id,
+            Swing.status == SwingStatus.COMPLETED
+        ).all()
+    except Exception as e:
+        # Fallback if status column doesn't exist yet (migration pending)
+        logger.warning(f"Status filter failed, returning all swings: {str(e)}")
+        swings = db.query(Swing).filter(Swing.user_id == user_id).all()
+    
     return [
         {
             "id": swing.id,
             "filename": swing.filename,
-            "title": swing.title,  # DM-57: Custom title
-            "notes": swing.notes,  # DM-57: User notes
+            "title": getattr(swing, 'title', None),  # DM-57: Custom title
+            "notes": getattr(swing, 'notes', None),  # DM-57: User notes
             "video_url": swing.video_url,
-            "status": swing.status.value,  # DM-56: Status tracking
+            "status": getattr(swing, 'status', 'completed').value if hasattr(swing, 'status') else 'completed',  # DM-56: Status tracking
             "created_at": str(swing.created_at),
             "has_analysis": swing.analysis is not None
         }
