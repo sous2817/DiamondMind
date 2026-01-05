@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.13** | AI-Driven Baseball Analytics Platform
+**Version 2.14** | AI-Driven Baseball Analytics Platform
 
 ---
 
@@ -640,6 +640,7 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 | `/api/videos/upload`          | POST      | Upload video for analysis        | Multipart form-data (video file) +`job_id` +`user_id` (optional) | JSON `{"status": "processing"}` |
 | `/ws/progress/{job_id}`       | WebSocket | Real-time progress & results     | WebSocket connection                                                | JSON events                       |
 | `/api/jobs/{job_id}/progress` | POST      | Receive progress from AI service | JSON:`{"progress": int}`                                          | JSON:`{"status": "ok"}`         |
+| `/api/auth/login`             | GET       | Email-based login                | Query param: `email`                                                | JSON user object                  |
 | `/api/users`                  | POST      | Create new user                  | Query params: `email`, `username`                                   | JSON user object                  |
 | `/api/users/{user_id}`        | GET       | Get user details                 | N/A                                                                 | JSON user object                  |
 | `/api/users/{user_id}/swings` | GET       | Get user's swings                | N/A                                                                 | JSON array of swings              |
@@ -762,12 +763,62 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 
 ## 12. Authentication & Security
 
+### 🔐 User Authentication (DM-55)
+
+**Implementation:** Email-based authentication with session persistence
+
+**Mobile App Architecture:**
+- **AuthService** (`src/services/AuthService.js`) - Handles signup, login, logout
+- **UserContext** (`src/context/UserContext.js`) - Global user state management
+- **AsyncStorage** - Session persistence across app restarts
+- **React Navigation** - Conditional rendering (auth screens vs main app)
+
+**Auth Flow:**
+```
+[App Launch]
+    ↓
+[UserContext loads from AsyncStorage]
+    ↓
+[User exists?] → YES → [Main App with Tabs]
+    ↓ NO
+[Auth Navigator] → [Login/Signup Screens]
+    ↓
+[User logs in/signs up]
+    ↓
+[Save to AsyncStorage]
+    ↓
+[Main App with Tabs]
+```
+
+**Screens:**
+- **LoginScreen** - Email-based login with validation
+- **SignupScreen** - Email + username signup
+- **ProfileScreen** - User info, swing history, logout
+
+**Backend Endpoints:**
+- `GET /api/auth/login?email={email}` - Returns user object if found
+- `POST /api/users?email={email}&username={username}` - Creates new user
+- `GET /api/users/{user_id}/swings` - Returns user's swing history
+
+**Session Management:**
+- Sessions persist in AsyncStorage under key `user_session`
+- User object includes: `id`, `email`, `username`, `created_at`
+- Logout clears AsyncStorage and returns to login screen
+
+**Data Association:**
+- All swing uploads include `user_id` query parameter
+- Swings table has FK to users table with `ON DELETE CASCADE`
+- Analysis results linked to swings via `swing_id` FK
+
 ### 🔐 Service-to-Service Communication
 
 - **Backend → AI Service:** Open (Internal Render Network)
 - **AI Service → Backend:** Open for progress updates
-- **Mobile → Backend:** Currently Open (Dev Mode)
-- **Future:** Plan to implement Auth0 or Firebase authentication
+- **Mobile → Backend:** Email-based authentication (no password for MVP)
+- **Future Enhancements:** 
+  - Password-based authentication
+  - OAuth providers (Google, Apple)
+  - JWT tokens for API security
 
 ---
 
