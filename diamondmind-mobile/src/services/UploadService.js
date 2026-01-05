@@ -2,11 +2,17 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Config } from '../config.js';
 
 const UploadService = {
-    uploadSwingVideo: async (fileUri, jobId, signal) => {
-        const url = `${Config.API_BASE_URL}/api/videos/upload?job_id=${jobId}`;
+    uploadSwingVideo: async (fileUri, jobId, userId, signal) => {
+        // Build URL with job_id and optional user_id
+        let url = `${Config.API_BASE_URL}/api/videos/upload?job_id=${jobId}`;
+        if (userId) {
+            url += `&user_id=${userId}`;
+            console.log(`📤 Starting upload for Job ID: ${jobId}, User ID: ${userId}`);
+        } else {
+            console.log(`📤 Starting upload for Job ID: ${jobId} (no user)`);
+        }
 
-        // 🚀 RESTORED: Terminal notification for start
-        console.log(`📤 Starting upload for Job ID: ${jobId}`);
+
 
         try {
             const response = await FileSystem.uploadAsync(url, fileUri, {

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import 'react-native-gesture-handler';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,6 +9,14 @@ import UploadService from './src/services/UploadService.js';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
 import BatTrailOverlay from './src/components/BatTrailOverlay';
 import { Config } from './src/config.js';
+import { UserProvider, UserContext } from './src/context/UserContext';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/screens/SignupScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import { Home, User } from 'lucide-react-native';
 
 // --- MODERN THEME ---
 const THEME = {
@@ -114,7 +123,61 @@ const styles = StyleSheet.create({
   closeFab: { position: 'absolute', top: 60, right: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }
 });
 
-export default function App() {
+const AuthStack = createStackNavigator();
+
+function AuthNavigator() {
+  return (
+    <NavigationContainer>
+      <AuthStack.Navigator
+        screenOptions={{
+          headerShown: false
+        }}
+      >
+        <AuthStack.Screen name="Login" component={LoginScreen} />
+        <AuthStack.Screen name="Signup" component={SignupScreen} />
+      </AuthStack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+const MainTabs = createBottomTabNavigator();
+
+function MainTabNavigator() {
+  return (
+    <MainTabs.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: THEME.accent,
+        tabBarInactiveTintColor: THEME.subtext,
+        tabBarStyle: {
+          backgroundColor: THEME.card,
+          borderTopColor: THEME.border,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 85 : 60,
+        },
+      }}
+    >
+      <MainTabs.Screen
+        name="Upload"
+        component={MainApp}
+        options={{
+          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+        }}
+      />
+      <MainTabs.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+        }}
+      />
+    </MainTabs.Navigator>
+  );
+}
+
+function MainApp() {
+  const { logout, user } = useContext(UserContext);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -273,7 +336,7 @@ export default function App() {
 
     try {
       // Note: "Starting upload..." log is handled inside UploadService.js
-      const data = await UploadService.uploadSwingVideo(uri, jobId, abortControllerRef.current.signal);
+      const data = await UploadService.uploadSwingVideo(uri, jobId, user?.id, abortControllerRef.current.signal);
 
       // If sync response contains result (legacy behavior or fast response)
       if (data && data.frames) {
@@ -333,196 +396,235 @@ export default function App() {
   const videoRatio = player.src?.width ? player.src.width / player.src.height : 1.77;
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
+    <UserProvider>
+      <SafeAreaProvider>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
 
-      {/* --- Fullscreen Mode --- */}
-      {result && isFullscreen && (
-        <View style={styles.fullscreenContainer}>
-          <View style={{ flex: 1 }} onLayout={(e) => setFullscreenDimensions(e.nativeEvent.layout)}>
-            <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              {showOverlay && (
-                <SkeletonOverlay
-                  landmarks={currentFrameData}
+        {/* --- Fullscreen Mode --- */}
+        {result && isFullscreen && (
+          <View style={styles.fullscreenContainer}>
+            <View style={{ flex: 1 }} onLayout={(e) => setFullscreenDimensions(e.nativeEvent.layout)}>
+              <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                {showOverlay && (
+                  <SkeletonOverlay
+                    landmarks={currentFrameData}
+                    videoWidth={videoDimensions.width}
+                    videoHeight={videoDimensions.height}
+                    containerWidth={fullscreenDimensions.width}
+                    containerHeight={fullscreenDimensions.height}
+                  />
+                )}
+              </View>
+              {showBatTrail && (
+                <BatTrailOverlay
+                  frames={result.frames}
+                  currentFrameIndex={currentFrameIndexRef.current}
                   videoWidth={videoDimensions.width}
                   videoHeight={videoDimensions.height}
                   containerWidth={fullscreenDimensions.width}
                   containerHeight={fullscreenDimensions.height}
                 />
               )}
+              <TouchableOpacity style={styles.closeFab} onPress={() => setIsFullscreen(false)}>
+                <Minimize2 size={24} color="#FFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ position: 'absolute', top: 60, left: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => setShowOverlay(!showOverlay)}
+              >
+                {showOverlay ? <Eye size={24} color="#FFF" /> : <EyeOff size={24} color="#FFF" />}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ position: 'absolute', top: 110, left: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => setShowBatTrail(!showBatTrail)}
+              >
+                <Text style={{ color: '#FFF', fontSize: 20, fontWeight: 'bold' }}>🏏</Text>
+              </TouchableOpacity>
             </View>
-            {showBatTrail && (
-              <BatTrailOverlay
-                frames={result.frames}
-                currentFrameIndex={currentFrameIndexRef.current}
-                videoWidth={videoDimensions.width}
-                videoHeight={videoDimensions.height}
-                containerWidth={fullscreenDimensions.width}
-                containerHeight={fullscreenDimensions.height}
-              />
-            )}
-            <TouchableOpacity style={styles.closeFab} onPress={() => setIsFullscreen(false)}>
-              <Minimize2 size={24} color="#FFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ position: 'absolute', top: 60, left: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => setShowOverlay(!showOverlay)}
-            >
-              {showOverlay ? <Eye size={24} color="#FFF" /> : <EyeOff size={24} color="#FFF" />}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ position: 'absolute', top: 110, left: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => setShowBatTrail(!showBatTrail)}
-            >
-              <Text style={{ color: '#FFF', fontSize: 20, fontWeight: 'bold' }}>🏏</Text>
-            </TouchableOpacity>
           </View>
-        </View>
-      )}
+        )}
 
-      {/* --- Main Interface --- */}
-      {!isFullscreen && (
-        <SafeAreaView style={styles.container}>
+        {/* --- Main Interface --- */}
+        {!isFullscreen && (
+          <SafeAreaView style={styles.container}>
 
-          {/* Header */}
-          <View style={styles.headerContainer}>
-            <View style={styles.badge}>
-              <Zap size={12} color={THEME.accent} fill={THEME.accent} />
-              <Text style={styles.badgeText}>AI POWERED</Text>
+            {/* Header */}
+            <View style={styles.headerContainer}>
+              <View style={styles.badge}>
+                <Zap size={12} color={THEME.accent} fill={THEME.accent} />
+                <Text style={styles.badgeText}>AI POWERED</Text>
+              </View>
+              <Text style={styles.title}>DiamondMind</Text>
+              <Text style={styles.subtitle}>Pro-Level Swing Analysis</Text>
             </View>
-            <Text style={styles.title}>DiamondMind</Text>
-            <Text style={styles.subtitle}>Pro-Level Swing Analysis</Text>
-          </View>
 
-          {/* Content Area */}
-          <View style={{ flex: 1 }}>
+            {/* Content Area */}
+            <View style={{ flex: 1 }}>
 
-            {/* 1. Upload Card (Empty State) */}
-            {!loading && !result && (
-              <View style={styles.uploadCard}>
-                <View style={styles.iconCircle}>
-                  <UploadCloud size={32} color={THEME.accent} />
+              {/* 1. Upload Card (Empty State) */}
+              {!loading && !result && (
+                <View style={styles.uploadCard}>
+                  <View style={styles.iconCircle}>
+                    <UploadCloud size={32} color={THEME.accent} />
+                  </View>
+                  <Text style={styles.ctaText}>Analyze a Swing</Text>
+                  <Text style={styles.ctaSubtext}>Select a video from your gallery to generate a skeletal frame analysis.</Text>
+
+                  <TouchableOpacity style={styles.primaryButton} onPress={pickVideo}>
+                    <Text style={styles.primaryButtonText}>Open Gallery</Text>
+                    <ChevronRight size={20} color="#FFF" />
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.ctaText}>Analyze a Swing</Text>
-                <Text style={styles.ctaSubtext}>Select a video from your gallery to generate a skeletal frame analysis.</Text>
+              )}
 
-                <TouchableOpacity style={styles.primaryButton} onPress={pickVideo}>
-                  <Text style={styles.primaryButtonText}>Open Gallery</Text>
-                  <ChevronRight size={20} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            )}
+              {/* 2. Loading State */}
+              {loading && (
+                <View style={styles.statusCard}>
+                  <ActivityIndicator size="large" color={THEME.accent} />
+                  <Text style={styles.loadingText}>Analyzing Swing...</Text>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressBar, { width: `${progress}%` }]} />
+                  </View>
+                  <Text style={{ marginTop: 8, color: THEME.subtext, fontSize: 12 }}>
+                    Uploading & Processing: {progress}%
+                  </Text>
 
-            {/* 2. Loading State */}
-            {loading && (
-              <View style={styles.statusCard}>
-                <ActivityIndicator size="large" color={THEME.accent} />
-                <Text style={styles.loadingText}>Analyzing Swing...</Text>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressBar, { width: `${progress}%` }]} />
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => { abortControllerRef.current?.abort(); setLoading(false); }}>
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={{ marginTop: 8, color: THEME.subtext, fontSize: 12 }}>
-                  Uploading & Processing: {progress}%
-                </Text>
+              )}
 
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => { abortControllerRef.current?.abort(); setLoading(false); }}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* 3. Success / Results View */}
-            {result && (
-              <View style={styles.resultsContainer}>
-                <View
-                  style={[styles.videoFrame, { aspectRatio: videoRatio }]}
-                  onLayout={(e) => setContainerDimensions(e.nativeEvent.layout)}
-                >
-                  <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
-                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                    {showOverlay && (
-                      <SkeletonOverlay
-                        landmarks={currentFrameData}
+              {/* 3. Success / Results View */}
+              {result && (
+                <View style={styles.resultsContainer}>
+                  <View
+                    style={[styles.videoFrame, { aspectRatio: videoRatio }]}
+                    onLayout={(e) => setContainerDimensions(e.nativeEvent.layout)}
+                  >
+                    <VideoView player={player} style={StyleSheet.absoluteFill} contentMode="contain" />
+                    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                      {showOverlay && (
+                        <SkeletonOverlay
+                          landmarks={currentFrameData}
+                          videoWidth={videoDimensions.width}
+                          videoHeight={videoDimensions.height}
+                          containerWidth={containerDimensions.width}
+                          containerHeight={containerDimensions.height}
+                        />
+                      )}
+                    </View>
+                    {showBatTrail && (
+                      <BatTrailOverlay
+                        frames={result.frames}
+                        currentFrameIndex={currentFrameIndexRef.current}
                         videoWidth={videoDimensions.width}
                         videoHeight={videoDimensions.height}
                         containerWidth={containerDimensions.width}
                         containerHeight={containerDimensions.height}
                       />
                     )}
+                    <TouchableOpacity
+                      style={{ position: 'absolute', bottom: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
+                      onPress={() => setShowOverlay(!showOverlay)}
+                    >
+                      {showOverlay ? <Eye size={20} color="#FFF" /> : <EyeOff size={20} color="#FFF" />}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ position: 'absolute', bottom: 16, left: 60, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
+                      onPress={() => setShowBatTrail(!showBatTrail)}
+                    >
+                      <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>🏏</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
+                      onPress={() => setIsFullscreen(true)}
+                    >
+                      <Maximize2 size={20} color="#FFF" />
+                    </TouchableOpacity>
                   </View>
-                  {showBatTrail && (
-                    <BatTrailOverlay
-                      frames={result.frames}
-                      currentFrameIndex={currentFrameIndexRef.current}
-                      videoWidth={videoDimensions.width}
-                      videoHeight={videoDimensions.height}
-                      containerWidth={containerDimensions.width}
-                      containerHeight={containerDimensions.height}
-                    />
+
+                  {/* Attack Angle Metric */}
+                  {attackAngle !== null && (
+                    <View style={{ marginTop: 16, backgroundColor: THEME.card, padding: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                      <Text style={{ fontSize: 14, color: THEME.subtext, fontWeight: '600', marginBottom: 4 }}>Attack Angle</Text>
+                      <Text style={{ fontSize: 28, color: THEME.primary, fontWeight: 'bold' }}>{attackAngle}°</Text>
+                      <Text style={{ fontSize: 12, color: THEME.subtext, marginTop: 4 }}>
+                        {attackAngle > 0 ? '↗ Upward swing' : attackAngle < 0 ? '↘ Downward swing' : '→ Level swing'}
+                      </Text>
+                    </View>
                   )}
-                  <TouchableOpacity
-                    style={{ position: 'absolute', bottom: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
-                    onPress={() => setShowOverlay(!showOverlay)}
-                  >
-                    {showOverlay ? <Eye size={20} color="#FFF" /> : <EyeOff size={20} color="#FFF" />}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={{ position: 'absolute', bottom: 16, left: 60, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
-                    onPress={() => setShowBatTrail(!showBatTrail)}
-                  >
-                    <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>🏏</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={{ position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
-                    onPress={() => setIsFullscreen(true)}
-                  >
-                    <Maximize2 size={20} color="#FFF" />
-                  </TouchableOpacity>
-                </View>
 
-                {/* Attack Angle Metric */}
-                {attackAngle !== null && (
-                  <View style={{ marginTop: 16, backgroundColor: THEME.card, padding: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
-                    <Text style={{ fontSize: 14, color: THEME.subtext, fontWeight: '600', marginBottom: 4 }}>Attack Angle</Text>
-                    <Text style={{ fontSize: 28, color: THEME.primary, fontWeight: 'bold' }}>{attackAngle}°</Text>
-                    <Text style={{ fontSize: 12, color: THEME.subtext, marginTop: 4 }}>
-                      {attackAngle > 0 ? '↗ Upward swing' : attackAngle < 0 ? '↘ Downward swing' : '→ Level swing'}
-                    </Text>
+                  {/* Action Buttons */}
+                  <View style={styles.actionBar}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={handleReset}>
+                      <X size={20} color={THEME.primary} />
+                      <Text style={styles.actionBtnText}>New Swing</Text>
+                    </TouchableOpacity>
+                    {/* Download button removed as requested */}
                   </View>
-                )}
-
-                {/* Action Buttons */}
-                <View style={styles.actionBar}>
-                  <TouchableOpacity style={styles.actionBtn} onPress={handleReset}>
-                    <X size={20} color={THEME.primary} />
-                    <Text style={styles.actionBtnText}>New Swing</Text>
-                  </TouchableOpacity>
-                  {/* Download button removed as requested */}
                 </View>
+              )}
+            </View>
+
+            {/* --- Unified Floating Error Toast (Bottom) --- */}
+            {error && (
+              <View style={styles.errorToast}>
+                <AlertCircle size={24} color="#EF4444" />
+                <View style={styles.errorTextContent}>
+                  <Text style={styles.errorTitle}>Analysis Failed</Text>
+                  <Text style={styles.errorMsg} numberOfLines={1}>{error}</Text>
+                </View>
+                <TouchableOpacity style={styles.retryPill} onPress={pickVideo}>
+                  <Text style={styles.retryText}>RETRY</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ marginLeft: 12 }} onPress={() => setError(null)}>
+                  <X size={18} color="#64748B" />
+                </TouchableOpacity>
               </View>
             )}
-          </View>
 
-          {/* --- Unified Floating Error Toast (Bottom) --- */}
-          {error && (
-            <View style={styles.errorToast}>
-              <AlertCircle size={24} color="#EF4444" />
-              <View style={styles.errorTextContent}>
-                <Text style={styles.errorTitle}>Analysis Failed</Text>
-                <Text style={styles.errorMsg} numberOfLines={1}>{error}</Text>
-              </View>
-              <TouchableOpacity style={styles.retryPill} onPress={pickVideo}>
-                <Text style={styles.retryText}>RETRY</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={{ marginLeft: 12 }} onPress={() => setError(null)}>
-                <X size={18} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-          )}
+          </SafeAreaView>
+        )}
+      </SafeAreaProvider>
+    </UserProvider>
+  );
+}
 
-        </SafeAreaView>
-      )}
-    </SafeAreaProvider>
+export default function App() {
+  return (
+    <UserProvider>
+      <AppContent />
+    </UserProvider>
+  );
+}
+
+function AppContent() {
+  const { user, loading } = useContext(UserContext);
+
+  console.log('AppContent render - user:', user, 'loading:', loading);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' }}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={{ marginTop: 16, color: '#64748B' }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (!user) {
+    console.log('No user, rendering AuthNavigator');
+    return <AuthNavigator />;
+  }
+
+  console.log('User logged in, rendering MainTabNavigator');
+  return (
+    <NavigationContainer>
+      <SafeAreaView style={{ flex: 1, backgroundColor: THEME.bg }} edges={['bottom']}>
+        <MainTabNavigator />
+      </SafeAreaView>
+    </NavigationContainer>
   );
 }

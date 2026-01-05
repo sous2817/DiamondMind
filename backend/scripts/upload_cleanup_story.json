@@ -1,0 +1,77 @@
+{
+    "defaults": {
+        "priority": {
+            "name": "Medium"
+        },
+        "labels": [
+            "Backend",
+            "Database",
+            "Enhancement"
+        ]
+    },
+    "stories": [
+        {
+            "summary": "Add Upload Cleanup for Aborted/Failed Swing Analysis",
+            "priority": {
+                "name": "Medium"
+            },
+            "details": {
+                "user_story": "As a developer, I want proper cleanup of database records when users abort uploads or when AI processing fails, so that we don't accumulate orphaned data in the database.",
+                "context": "Currently, when a user uploads a swing video, the backend creates a Swing record in the database and starts AI processing. If the user cancels the upload or if processing fails, the database records may remain orphaned with no analysis results or incomplete data. This can lead to database bloat and confusion when viewing swing history.",
+                "acceptance_criteria": [
+                    "Add 'status' field to Swing model (pending, processing, completed, failed)",
+                    "Update backend to set status='processing' when upload starts",
+                    "Update backend to set status='completed' when analysis finishes successfully",
+                    "Update backend to set status='failed' if AI processing errors",
+                    "Add cleanup endpoint or scheduled job to remove old 'pending' or 'failed' swings",
+                    "Mobile app calls cleanup endpoint when user cancels upload (optional)",
+                    "Swing history only shows swings with status='completed'",
+                    "Add database migration for new status field"
+                ],
+                "technical_details": [
+                    "Database Schema Changes:",
+                    "- Add 'status' ENUM column to swings table: ('pending', 'processing', 'completed', 'failed')",
+                    "- Add 'error_message' TEXT column to swings table (nullable)",
+                    "- Add index on status for efficient queries",
+                    "",
+                    "Backend Changes (main.py):",
+                    "- Update POST /api/videos/upload to set status='processing' when creating Swing",
+                    "- Update background processor to set status='completed' on success",
+                    "- Update background processor to set status='failed' and store error_message on failure",
+                    "- Add GET /api/users/{user_id}/swings to filter by status='completed'",
+                    "",
+                    "Cleanup Options:",
+                    "Option 1: Scheduled Job (Recommended)",
+                    "- Add background task that runs every hour",
+                    "- Delete swings where status='pending' or 'processing' and created_at > 24 hours ago",
+                    "- Delete swings where status='failed' and created_at > 7 days ago",
+                    "",
+                    "Option 2: Manual Cleanup Endpoint",
+                    "- Add DELETE /api/swings/{swing_id} endpoint",
+                    "- Mobile app calls this when user cancels upload",
+                    "- Requires tracking swing_id before analysis completes",
+                    "",
+                    "Option 3: Transaction-Based (Most Robust)",
+                    "- Wrap entire upload + AI processing in a database transaction",
+                    "- Only commit when analysis completes successfully",
+                    "- Rollback on error or timeout",
+                    "- Requires connection pooling adjustments",
+                    "",
+                    "Migration Script:",
+                    "- Alembic migration to add status and error_message columns",
+                    "- Set existing swings to status='completed' (assume they're valid)",
+                    "- Add NOT NULL constraint after backfilling"
+                ],
+                "edge_cases": [
+                    "User cancels upload mid-processing: Backend continues, marks as completed or failed based on AI result",
+                    "AI service crashes during processing: Swing remains in 'processing' state, cleanup job removes after 24 hours",
+                    "Network timeout between backend and AI service: Backend should catch timeout and set status='failed'",
+                    "User uploads same video twice: Both swings are created, both complete successfully (no deduplication needed)",
+                    "Cleanup job runs while processing: Only remove swings older than threshold (e.g., 24 hours)",
+                    "Database migration on production: Existing swings without status should default to 'completed'",
+                    "Concurrent cleanup and status update: Use database locks or WHERE status='pending' in DELETE query"
+                ]
+            }
+        }
+    ]
+}
