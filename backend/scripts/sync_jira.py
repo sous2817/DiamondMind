@@ -3,6 +3,7 @@ import os
 import json
 import sys
 from dotenv import load_dotenv
+import argparse
 
 # Load environment variables
 load_dotenv()
@@ -15,7 +16,7 @@ PROJECT_KEY = os.getenv("PROJECT_KEY")
 
 # ✅ FIX: Use relative path (works on any machine)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STORIES_FILE = os.path.join(BASE_DIR, "stories.json")
+DEFAULT_STORIES_FILE = os.path.join(BASE_DIR, "stories.json")
 
 # Validate critical env vars
 if not all([JIRA_URL, JIRA_EMAIL, JIRA_TOKEN, PROJECT_KEY]):
@@ -57,9 +58,76 @@ def format_description(details):
 
     return desc
 
+def validate_story_structure(story_data, index):
+    """
+    Validates that a story has required fields.
+    Returns (is_valid, error_message)
+    """
+    if not story_data.get("summary"):
+        return False, f"Story #{index}: Missing required field 'summary'"
+    
+    # If updating, must have key
+    if story_data.get("_action") == "update" and not story_data.get("key"):
+        return False, f"Story #{index}: Update requires 'key' field"
+    
+    return True, None
+
+def load_stories_file(file_path):
+    """
+    Loads and validates JSON file.
+    Returns (stories, defaults) or (None, None) on error.
+    """
+    if not os.path.exists(file_path):
+        print(f"❌ Error: Could not find {file_path}")
+        return None, None
+
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"❌ Error parsing JSON: {e}")
+        return None, None
+
+    # Handle new structure vs legacy list
+    if isinstance(data, list):
+        stories = data
+        defaults = {}
+    else:
+        stories = data.get("stories", [])
+        defaults = data.get("defaults", {})
+    
+    return stories, defaults
+
+def build_issue_fields(story_data, defaults):
+    """
+    Builds JIRA issue fields from story data and defaults.
+    """
+    summary = story_data.get("summary")
+    issuetype = story_data.get("issuetype", defaults.get("issuetype", {"name": "Story"}))
+    priority = story_data.get("priority", defaults.get("priority", {"name": "Medium"}))
+    
+    # Merge labels (unique values)
+    default_labels = defaults.get("labels", [])
+    story_labels = story_data.get("labels", [])
+    combined_labels = list(set(default_labels + story_labels))
+
+    fields = {
+        "project": {"key": PROJECT_KEY},
+        "summary": summary,
+        "issuetype": issuetype,
+        "priority": priority,
+        "labels": combined_labels,
+        "description": story_data.get("description", "")
+    }
+
+    if "details" in story_data:
+        fields["description"] = format_description(story_data["details"])
+    
+    return fields
+
 def check_if_exists(jira, summary):
     """
-    ✅ IDEMPOTENCY CHECK: Returns existing issue key if found, else None.
+    ✅ IDEMPOTENCY CHECK: Returns existing issue if found, else None.
     """
     # Escape quotes for JQL
     safe_summary = summary.replace('"', '\\"')
@@ -73,83 +141,202 @@ def check_if_exists(jira, summary):
             return issue
     return None
 
-def create_backlog():
-    if not os.path.exists(STORIES_FILE):
-        print(f"❌ Error: Could not find {STORIES_FILE}")
-        return
-
+def create_story(jira, story_data, defaults, dry_run=False):
+    """
+    Creates a new JIRA story.
+    Returns (success, issue_key_or_error)
+    """
+    summary = story_data.get("summary")
+    
+    # Check if already exists
+    existing_issue = check_if_exists(jira, summary)
+    if existing_issue:
+        return False, f"Story already exists as {existing_issue.key}"
+    
+    fields = build_issue_fields(story_data, defaults)
+    
+    if dry_run:
+        print(f"   [DRY RUN] Would create: {summary}")
+        return True, "DRY-RUN"
+    
     try:
-        with open(STORIES_FILE, "r") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        print(f"❌ Error parsing JSON: {e}")
+        new_issue = jira.create_issue(fields=fields)
+        return True, new_issue.key
+    except Exception as e:
+        return False, str(e)
+
+def update_story(jira, story_data, defaults, dry_run=False):
+    """
+    Updates an existing JIRA story by key.
+    Returns (success, message)
+    """
+    issue_key = story_data.get("key")
+    summary = story_data.get("summary")
+    
+    if not issue_key:
+        return False, "Missing 'key' field for update"
+    
+    fields = build_issue_fields(story_data, defaults)
+    # Remove project key from update (can't change project)
+    fields.pop("project", None)
+    
+    if dry_run:
+        print(f"   [DRY RUN] Would update {issue_key}: {summary}")
+        return True, "DRY-RUN"
+    
+    try:
+        issue = jira.issue(issue_key)
+        issue.update(fields=fields)
+        return True, f"Updated {issue_key}"
+    except Exception as e:
+        return False, str(e)
+
+def sync_stories(file_path=None, dry_run=False):
+    """
+    Smart sync: Creates new stories or updates existing ones based on 'key' field.
+    """
+    file_path = file_path or DEFAULT_STORIES_FILE
+    stories, defaults = load_stories_file(file_path)
+    
+    if stories is None:
         return
-
-    # Handle new structure vs legacy list
-    if isinstance(data, list):
-        stories = data
-        defaults = {}
-    else:
-        stories = data.get("stories", [])
-        defaults = data.get("defaults", {})
-
+    
     jira = get_jira_client()
     print(f"🚀 Connecting to JIRA Project: {PROJECT_KEY}...")
     print(f"📂 Found {len(stories)} stories to process.")
-
-    for story_data in stories:
-        # Merge defaults with specific story data
-        summary = story_data.get("summary")
-        if not summary:
-            print("❌ Skipping invalid story: Missing 'summary'")
+    if dry_run:
+        print("🔍 DRY RUN MODE - No changes will be made\n")
+    
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    error_count = 0
+    
+    for idx, story_data in enumerate(stories, 1):
+        # Validate story structure
+        is_valid, error_msg = validate_story_structure(story_data, idx)
+        if not is_valid:
+            print(f"❌ {error_msg}")
+            error_count += 1
             continue
-
-        issuetype = story_data.get("issuetype", defaults.get("issuetype", {"name": "Story"}))
-        priority = story_data.get("priority", defaults.get("priority", {"name": "Medium"}))
         
-        # Merge labels (unique values)
-        default_labels = defaults.get("labels", [])
-        story_labels = story_data.get("labels", [])
-        combined_labels = list(set(default_labels + story_labels))
-
-        fields = {
-            "project": {"key": PROJECT_KEY},
-            "summary": summary,
-            "issuetype": issuetype,
-            "priority": priority,
-            "labels": combined_labels,
-            "description": story_data.get("description", "")
-        }
-
-        if "details" in story_data:
-            fields["description"] = format_description(story_data["details"])
-
-        # --- EXECUTION ---
+        summary = story_data.get("summary")
         
-        # 1. Update existing by Key
+        # Determine action: update if has key, create otherwise
         if "key" in story_data:
-            issue_key = story_data["key"]
-            print(f"🔄 Updating explicitly defined ticket: {issue_key}...")
-            try:
-                jira.issue(issue_key).update(fields=fields)
-                print(f"✅ Updated {issue_key}")
-            except Exception as e:
-                print(f"❌ Failed update {issue_key}: {e}")
-        
-        # 2. Idempotency Check (Prevent Duplicates)
-        else:
-            existing_issue = check_if_exists(jira, summary)
-            if existing_issue:
-                print(f"⚠️  Skipping: '{summary}' already exists as {existing_issue.key}")
+            # Update existing
+            success, message = update_story(jira, story_data, defaults, dry_run)
+            if success:
+                print(f"✅ {message}")
+                updated_count += 1
             else:
-                # 3. Create New
-                try:
-                    new_issue = jira.create_issue(fields=fields)
-                    print(f"✨ Created New Ticket: {new_issue.key}")
-                except Exception as e:
-                    print(f"❌ Failed to create '{summary}': {e}")
+                print(f"❌ Failed to update '{summary}': {message}")
+                error_count += 1
+        else:
+            # Create new
+            success, result = create_story(jira, story_data, defaults, dry_run)
+            if success:
+                print(f"✨ Created: {summary} ({result})")
+                created_count += 1
+            else:
+                print(f"⚠️  Skipped '{summary}': {result}")
+                skipped_count += 1
+    
+    # Summary
+    print(f"\n📊 Summary:")
+    print(f"   ✨ Created: {created_count}")
+    print(f"   ✅ Updated: {updated_count}")
+    print(f"   ⚠️  Skipped: {skipped_count}")
+    print(f"   ❌ Errors: {error_count}")
+
+def create_stories_only(file_path=None, dry_run=False):
+    """
+    Creates only new stories (skips stories with 'key' field).
+    """
+    file_path = file_path or DEFAULT_STORIES_FILE
+    stories, defaults = load_stories_file(file_path)
+    
+    if stories is None:
+        return
+    
+    jira = get_jira_client()
+    print(f"🚀 Connecting to JIRA Project: {PROJECT_KEY}...")
+    print(f"📂 Found {len(stories)} stories to process (CREATE mode).")
+    if dry_run:
+        print("🔍 DRY RUN MODE - No changes will be made\n")
+    
+    created_count = 0
+    skipped_count = 0
+    
+    for idx, story_data in enumerate(stories, 1):
+        # Skip stories with keys (those are for updates)
+        if "key" in story_data:
+            print(f"⏭️  Skipping '{story_data.get('summary')}' (has key, use 'update' command)")
+            skipped_count += 1
+            continue
+        
+        is_valid, error_msg = validate_story_structure(story_data, idx)
+        if not is_valid:
+            print(f"❌ {error_msg}")
+            skipped_count += 1
+            continue
+        
+        success, result = create_story(jira, story_data, defaults, dry_run)
+        if success:
+            print(f"✨ Created: {story_data.get('summary')} ({result})")
+            created_count += 1
+        else:
+            print(f"⚠️  Skipped '{story_data.get('summary')}': {result}")
+            skipped_count += 1
+    
+    print(f"\n📊 Summary: Created {created_count}, Skipped {skipped_count}")
+
+def update_stories_only(file_path=None, dry_run=False):
+    """
+    Updates only existing stories (requires 'key' field).
+    """
+    file_path = file_path or DEFAULT_STORIES_FILE
+    stories, defaults = load_stories_file(file_path)
+    
+    if stories is None:
+        return
+    
+    jira = get_jira_client()
+    print(f"🚀 Connecting to JIRA Project: {PROJECT_KEY}...")
+    print(f"📂 Found {len(stories)} stories to process (UPDATE mode).")
+    if dry_run:
+        print("🔍 DRY RUN MODE - No changes will be made\n")
+    
+    updated_count = 0
+    skipped_count = 0
+    
+    for idx, story_data in enumerate(stories, 1):
+        # Skip stories without keys
+        if "key" not in story_data:
+            print(f"⏭️  Skipping '{story_data.get('summary')}' (no key, use 'create' command)")
+            skipped_count += 1
+            continue
+        
+        is_valid, error_msg = validate_story_structure(story_data, idx)
+        if not is_valid:
+            print(f"❌ {error_msg}")
+            skipped_count += 1
+            continue
+        
+        success, message = update_story(jira, story_data, defaults, dry_run)
+        if success:
+            print(f"✅ {message}")
+            updated_count += 1
+        else:
+            print(f"❌ Failed: {message}")
+            skipped_count += 1
+    
+    print(f"\n📊 Summary: Updated {updated_count}, Skipped {skipped_count}")
 
 def transition_ticket(ticket_id, target_status="Done"):
+    """
+    Transitions a ticket to a different status.
+    """
     jira = get_jira_client()
     print(f"🕵️ Looking for {ticket_id}...")
     
@@ -173,17 +360,66 @@ def transition_ticket(ticket_id, target_status="Done"):
     except Exception as e:
         print(f"❌ Error: {e}")
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="JIRA Story Sync Tool - Create, update, or transition JIRA stories",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Smart sync (create new, update existing)
+  python sync_jira.py sync stories.json
+  
+  # Create only new stories
+  python sync_jira.py create stories.json
+  
+  # Update only existing stories
+  python sync_jira.py update dm10_update.json
+  
+  # Dry run (preview changes)
+  python sync_jira.py update dm10_update.json --dry-run
+  
+  # Transition ticket status
+  python sync_jira.py transition DM-10 Done
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    
+    # Sync command
+    sync_parser = subparsers.add_parser("sync", help="Smart sync: create new or update existing stories")
+    sync_parser.add_argument("file", nargs="?", default=DEFAULT_STORIES_FILE, help="JSON file path")
+    sync_parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
+    
+    # Create command
+    create_parser = subparsers.add_parser("create", help="Create only new stories")
+    create_parser.add_argument("file", nargs="?", default=DEFAULT_STORIES_FILE, help="JSON file path")
+    create_parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
+    
+    # Update command
+    update_parser = subparsers.add_parser("update", help="Update only existing stories (requires 'key' field)")
+    update_parser.add_argument("file", nargs="?", default=DEFAULT_STORIES_FILE, help="JSON file path")
+    update_parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
+    
+    # Transition command
+    transition_parser = subparsers.add_parser("transition", help="Change ticket status")
+    transition_parser.add_argument("ticket_id", help="JIRA ticket ID (e.g., DM-10)")
+    transition_parser.add_argument("status", nargs="?", default="Done", help="Target status (default: Done)")
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        return
+    
+    # Execute command
+    if args.command == "sync":
+        sync_stories(args.file, args.dry_run)
+    elif args.command == "create":
+        create_stories_only(args.file, args.dry_run)
+    elif args.command == "update":
+        update_stories_only(args.file, args.dry_run)
+    elif args.command == "transition":
+        transition_ticket(args.ticket_id, args.status)
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        
-        if command.lower() == "create":
-            create_backlog()
-        else:
-            ticket_id = command
-            status = sys.argv[2] if len(sys.argv) > 2 else "Done"
-            transition_ticket(ticket_id, status)
-    else:
-        print("⚠️  Usage:")
-        print("   1. Create/Update Backlog:   python scripts/sync_jira.py create")
-        print("   2. Move Ticket Status:      python scripts/sync_jira.py [TICKET_ID] [STATUS]")
+    main()

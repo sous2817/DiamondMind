@@ -1,0 +1,101 @@
+{
+    "defaults": {
+        "priority": {
+            "name": "High"
+        },
+        "labels": [
+            "Mobile",
+            "UX",
+            "Authentication"
+        ]
+    },
+    "stories": [
+        {
+            "summary": "Add User Authentication and Profile Management to Mobile App",
+            "priority": {
+                "name": "High"
+            },
+            "details": {
+                "user_story": "As a user, I want to create an account and log in to the DiamondMind app so that my swing analysis history is saved and accessible across sessions and devices.",
+                "context": "DM-10 implemented the backend database with users, swings, and analysis_results tables. The mobile app currently operates anonymously without user accounts. We need to add authentication UI (login/signup screens), persist user sessions, and associate all swing uploads with the logged-in user. This enables features like viewing swing history, tracking progress over time, and multi-device access.",
+                "acceptance_criteria": [
+                    "User can create a new account with email and username",
+                    "User can log in with existing credentials",
+                    "User session persists across app restarts (AsyncStorage)",
+                    "User can log out",
+                    "All swing uploads are automatically associated with logged-in user (user_id sent to backend)",
+                    "User can view their swing history (list of past swings)",
+                    "User can tap a swing to view its analysis results",
+                    "App shows 'Sign Up / Log In' screen on first launch",
+                    "App shows main upload screen after successful login",
+                    "Graceful error handling for network failures and invalid credentials"
+                ],
+                "technical_details": [
+                    "Mobile App - New Screens:",
+                    "- LoginScreen.js: Email/username input, login button, 'Create Account' link",
+                    "- SignupScreen.js: Email, username inputs, signup button, 'Already have account?' link",
+                    "- ProfileScreen.js: Display username, email, logout button, swing history list",
+                    "- SwingHistoryScreen.js: List of user's swings with thumbnails and dates",
+                    "- SwingDetailScreen.js: Display full analysis for a selected swing",
+                    "",
+                    "Mobile App - Navigation:",
+                    "- Add React Navigation (if not already present)",
+                    "- Stack Navigator: Login → Signup → Main App (Upload/Profile tabs)",
+                    "- Tab Navigator: Upload tab, Profile tab",
+                    "- Conditional rendering: Show auth screens if not logged in, main app if logged in",
+                    "",
+                    "Mobile App - State Management:",
+                    "- Add user context (UserContext.js) to store current user data",
+                    "- Store user session in AsyncStorage (key: 'user_session')",
+                    "- Load user session on app startup",
+                    "- Clear session on logout",
+                    "",
+                    "Mobile App - API Integration:",
+                    "- Create AuthService.js:",
+                    "  - signup(email, username) → POST /api/users",
+                    "  - login(email) → GET /api/users (search by email, or add login endpoint)",
+                    "  - getCurrentUser() → returns user from AsyncStorage",
+                    "  - logout() → clears AsyncStorage",
+                    "- Update UploadService.js:",
+                    "  - Pass user_id parameter to /api/videos/upload",
+                    "  - Get user_id from UserContext",
+                    "- Create SwingService.js:",
+                    "  - getUserSwings(user_id) → GET /api/users/{user_id}/swings",
+                    "  - getSwingAnalysis(swing_id) → GET /api/swings/{swing_id}/analysis",
+                    "",
+                    "Backend Changes (if needed):",
+                    "- Add GET /api/users?email={email} endpoint for login (search by email)",
+                    "- Or add POST /api/auth/login endpoint with email validation",
+                    "- Ensure /api/videos/upload accepts user_id parameter (already implemented)",
+                    "",
+                    "UI/UX Design:",
+                    "- Clean, minimal login/signup forms",
+                    "- Use existing app color scheme (gold accents, dark theme)",
+                    "- Show loading spinner during API calls",
+                    "- Display friendly error messages (e.g., 'Email already exists', 'User not found')",
+                    "- Swing history: Card-based list with video thumbnail, date, score (if available)",
+                    "- Pull-to-refresh on swing history",
+                    "",
+                    "Data Flow:",
+                    "1. User signs up → POST /api/users → Store user in AsyncStorage → Navigate to main app",
+                    "2. User logs in → GET /api/users?email={email} → Store user in AsyncStorage → Navigate to main app",
+                    "3. User uploads swing → Include user_id in upload request → Backend saves to database",
+                    "4. User views history → GET /api/users/{user_id}/swings → Display list",
+                    "5. User taps swing → GET /api/swings/{swing_id}/analysis → Display analysis with skeleton overlay"
+                ],
+                "edge_cases": [
+                    "Duplicate Email/Username: Backend returns 400 error, show 'Email already exists' message",
+                    "Invalid Login: User not found, show 'No account found with this email' message",
+                    "Network Failure During Signup/Login: Show 'Unable to connect' message, allow retry",
+                    "Session Expiry: Currently no session expiry (future: add JWT tokens with expiration)",
+                    "Offline Mode: User can view cached swing history but cannot upload or fetch new data",
+                    "Empty Swing History: Show empty state with 'Upload your first swing!' message",
+                    "Logout During Upload: Cancel upload, clear session, return to login screen",
+                    "Backend Cold Start: Show loading spinner, handle timeout gracefully",
+                    "User Deletes Account: Future feature - need DELETE /api/users/{user_id} endpoint",
+                    "Password Reset: Future feature - currently no password (email-based login only)"
+                ]
+            }
+        }
+    ]
+}

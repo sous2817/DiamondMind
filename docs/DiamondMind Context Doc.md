@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.12** | AI-Driven Baseball Analytics Platform
+**Version 2.13** | AI-Driven Baseball Analytics Platform
 
 ---
 
@@ -406,8 +406,9 @@ URLs and environment variables follow a strict hierarchy to avoid mismatches:
 | ------------------------------ | ---------------------------------- | ------------------------------------ | ---------------------------------------- |
 | **1. Mobile Config**     | Single source for mobile app       | `diamondmind-mobile/src/config.js` | ⚠️**UPDATE THIS FIRST**          |
 | **2. AI Service Config** | Backend URL for progress reporting | `ai-service/pose_engine.py`        | Has env var override via `BACKEND_URL` |
-| **3. Render Dashboard**  | Service-to-service URLs            | Render.com Environment Variables     | Set `AI_SERVICE_URL` here              |
+| **3. Render Dashboard**  | Service-to-service URLs            | Render.com Environment Variables     | Set `AI_SERVICE_URL` and `DATABASE_URL` here |
 | **4. Local Scripts**     | JIRA Automation                    | `backend/.env`                     | Used by `sync_jira.py`                 |
+| **5. Database**          | PostgreSQL connection              | `backend/.env` (local)               | Set `DATABASE_URL` for Render PostgreSQL |
 
 ---
 
@@ -419,6 +420,7 @@ URLs and environment variables follow a strict hierarchy to avoid mismatches:
 | `Config.WS_BASE_URL`  | `wss://diamondmind-backend-yalf.onrender.com`   | Mobile → Backend WebSocket | `diamondmind-mobile/src/config.js`    |
 | `BACKEND_URL`         | `https://diamondmind-backend-yalf.onrender.com` | AI → Backend progress      | `ai-service/pose_engine.py` (env var) |
 | `AI_SERVICE_URL`      | `https://dm-ai-service.onrender.com`            | Backend → AI               | Render Dashboard (Backend)              |
+| `DATABASE_URL`        | `postgresql://user:pass@host.internal/db`       | Backend → Database         | Render Dashboard (Backend) + `.env`     |
 | `PORT`                | `8001`                                          | AI Service                  | `ai-service/Dockerfile`               |
 
 ---
@@ -468,12 +470,16 @@ Follow these exact specifications if redeploying to Render.
 
 - `PYTHON_VERSION = 3.11.0` (or 3.12 if upgraded)
 - `AI_SERVICE_URL = https://dm-ai-service.onrender.com`
+- `DATABASE_URL = postgresql://...` (Render PostgreSQL Internal URL)
 
 **Dependencies:** `requirements.txt` includes:
 
 - `httpx` - For streaming requests to AI service
 - `fastapi` - Web framework
 - `python-multipart` - For file uploads
+- `sqlalchemy` - ORM for database operations
+- `psycopg2-binary` - PostgreSQL driver
+- `alembic` - Database migration tool
 
 ---
 
@@ -629,12 +635,16 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 
 ### 🔌 Backend (API Gateway)
 
-| Endpoint                        | Method    | Purpose                          | Request Format                                           | Response Format                   |
-| ------------------------------- | --------- | -------------------------------- | -------------------------------------------------------- | --------------------------------- |
-| `/api/videos/upload`          | POST      | Upload video for analysis        | Multipart form-data (video file) +`job_id` query param | JSON `{"status": "processing"}` |
-| `/ws/progress/{job_id}`       | WebSocket | Real-time progress & results     | WebSocket connection                                     | JSON events                       |
-| `/api/jobs/{job_id}/progress` | POST      | Receive progress from AI service | JSON:`{"progress": int}`                               | JSON:`{"status": "ok"}`         |
-| `/docs`                       | GET       | FastAPI Swagger documentation    | N/A                                                      | Interactive API docs              |
+| Endpoint                        | Method    | Purpose                          | Request Format                                                      | Response Format                   |
+| ------------------------------- | --------- | -------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `/api/videos/upload`          | POST      | Upload video for analysis        | Multipart form-data (video file) +`job_id` +`user_id` (optional) | JSON `{"status": "processing"}` |
+| `/ws/progress/{job_id}`       | WebSocket | Real-time progress & results     | WebSocket connection                                                | JSON events                       |
+| `/api/jobs/{job_id}/progress` | POST      | Receive progress from AI service | JSON:`{"progress": int}`                                          | JSON:`{"status": "ok"}`         |
+| `/api/users`                  | POST      | Create new user                  | Query params: `email`, `username`                                   | JSON user object                  |
+| `/api/users/{user_id}`        | GET       | Get user details                 | N/A                                                                 | JSON user object                  |
+| `/api/users/{user_id}/swings` | GET       | Get user's swings                | N/A                                                                 | JSON array of swings              |
+| `/api/swings/{swing_id}/analysis` | GET   | Get swing analysis               | N/A                                                                 | JSON analysis result              |
+| `/docs`                       | GET       | FastAPI Swagger documentation    | N/A                                                                 | Interactive API docs              |
 
 ---
 
@@ -728,6 +738,26 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 - **AI Service:** Ephemeral - saved to `/tmp/dm_uploads` during processing
 - **Cleanup:** Backend automatically deletes temp files in `finally` block of background task.
 
+### 💾 Database Persistence (DM-10)
+
+**Provider:** Render PostgreSQL (Managed)
+
+**Schema:**
+- `users` - User accounts (id, email, username, created_at, updated_at)
+- `swings` - Swing video metadata (id, user_id FK, filename, video_url, created_at)
+- `analysis_results` - AI analysis data (id, swing_id FK, skeletal_data JSONB, total_frames, fps, bat_trail JSONB, etc.)
+
+**Features:**
+- Foreign keys with `ON DELETE CASCADE` for data integrity
+- JSONB columns for efficient JSON storage (pose landmarks, bat positions)
+- Connection pooling (`pool_pre_ping=True`, `pool_size=5`, `max_overflow=10`)
+- SQLite fallback for local development (when `DATABASE_URL` not set)
+- Alembic migrations for version-controlled schema changes
+
+**Location:**
+- **Local:** SQLite file `backend/diamond_mind.db` (fallback)
+- **Production:** Render PostgreSQL (use Internal URL for better performance)
+
 ---
 
 ## 12. Authentication & Security
@@ -753,15 +783,36 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 
 ## 17. JIRA Automation
 
-**Script:** `backend/scripts/sync_jira.py`
+**Script:** `backend/scripts/sync_jira.py` (Enhanced with argparse CLI)
 **Config:** `backend/scripts/stories.json`
+**Documentation:** See `docs/JIRA_SYNC_GUIDE.md` for full usage guide
 
 ### Supported Commands:
 
-- `sync_jira.py create` - Creates new tickets from JSON
-- `sync_jira.py update` - Updates existing tickets
+```powershell
+# Smart sync (create new or update existing)
+python scripts/sync_jira.py sync [file.json] [--dry-run]
+
+# Create only new stories
+python scripts/sync_jira.py create [file.json] [--dry-run]
+
+# Update only existing stories (requires 'key' field)
+python scripts/sync_jira.py update [file.json] [--dry-run]
+
+# Transition ticket status
+python scripts/sync_jira.py transition DM-10 Done
+```
+
+### Features:
+
+- ✅ Separate create/update/sync commands
+- ✅ File path arguments (not hardcoded to stories.json)
+- ✅ Dry-run mode (`--dry-run` flag)
+- ✅ Validation before API calls
+- ✅ Summary statistics (created/updated/skipped/errors)
 
 ### Recent Tickets:
 
+- **DM-10:** Centralized Cloud Database (Completed)
 - **DM-49:** Optimize Skeleton Overlay Synchronization (Closed)
-- **DM-50:** Async Backend Refactor (In Progress)
+- **DM-50:** Async Backend Refactor (Closed)
