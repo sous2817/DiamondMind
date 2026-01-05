@@ -71,8 +71,28 @@ scheduler = AsyncIOScheduler()
 async def startup():
     """Create database tables on startup (for local dev with SQLite)"""
     logger.info("🚀 Starting up DiamondMind Backend...")
-    Base.metadata.create_all(bind=engine)
-    logger.info("✅ Database tables created/verified")
+    
+    # Run Alembic migrations automatically (for production)
+    try:
+        from alembic.config import Config
+        from alembic import command
+        import os
+        
+        # Only run migrations if DATABASE_URL is set (production)
+        if os.getenv("DATABASE_URL"):
+            logger.info("📊 Running database migrations...")
+            alembic_cfg = Config("alembic.ini")
+            command.upgrade(alembic_cfg, "head")
+            logger.info("✅ Database migrations complete")
+        else:
+            # Local development - just create tables
+            Base.metadata.create_all(bind=engine)
+            logger.info("✅ Database tables created/verified (local SQLite)")
+    except Exception as e:
+        logger.error(f"⚠️ Migration failed: {str(e)}")
+        # Fall back to creating tables directly
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database tables created/verified (fallback)")
     
     # Start cleanup job (runs every hour)
     scheduler.add_job(cleanup_orphaned_swings, 'interval', hours=1, id='cleanup_swings')
