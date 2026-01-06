@@ -16,6 +16,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import SwingDetailScreen from './src/screens/SwingDetailScreen';
 import { Home, User } from 'lucide-react-native';
 
 // --- MODERN THEME ---
@@ -141,6 +142,28 @@ function AuthNavigator() {
 }
 
 const MainTabs = createBottomTabNavigator();
+const ProfileStack = createStackNavigator();
+
+// Profile Stack Navigator (for nested navigation to SwingDetailScreen)
+function ProfileStackNavigator() {
+  return (
+    <ProfileStack.Navigator>
+      <ProfileStack.Screen
+        name="ProfileHome"
+        component={ProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="SwingDetail"
+        component={SwingDetailScreen}
+        options={{
+          title: 'Swing Details',
+          headerBackTitle: 'Back'
+        }}
+      />
+    </ProfileStack.Navigator>
+  );
+}
 
 function MainTabNavigator() {
   return (
@@ -167,7 +190,7 @@ function MainTabNavigator() {
       />
       <MainTabs.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileStackNavigator}
         options={{
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
         }}
