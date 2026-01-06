@@ -28,13 +28,15 @@ export default function SwingDetailScreen({ route, navigation }) {
         loadSwingData();
     }, [swingId]);
 
-    // Reload data when screen comes into focus
+    // Reload data when screen comes into focus (but not while editing)
     useEffect(() => {
         const unsubscribe = navigation.addListener('focus', () => {
-            loadSwingData();
+            if (!isEditing) {
+                loadSwingData();
+            }
         });
         return unsubscribe;
-    }, [navigation]);
+    }, [navigation, isEditing]);
 
     const loadSwingData = async () => {
         try {
