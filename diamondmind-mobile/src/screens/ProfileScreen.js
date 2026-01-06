@@ -14,7 +14,7 @@ const THEME = {
     border: '#E2E8F0'
 };
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
     const { user, logout } = useContext(UserContext);
     const [swings, setSwings] = useState([]);
     const [loading, setLoading] = useState(true);
