@@ -41,7 +41,11 @@ def upgrade() -> None:
     op.add_column('swings', sa.Column('notes', sa.Text(), nullable=True))
     
     # Backfill existing swings with 'completed' status
-    op.execute("UPDATE swings SET status = 'completed' WHERE status IS NULL")
+    # Use ENUM cast for PostgreSQL, plain string for SQLite
+    if bind.dialect.name == 'postgresql':
+        op.execute("UPDATE swings SET status = 'completed'::swingstatus WHERE status IS NULL")
+    else:
+        op.execute("UPDATE swings SET status = 'completed' WHERE status IS NULL")
     
     # Make status NOT NULL after backfill
     op.alter_column('swings', 'status', nullable=False, server_default='processing')
