@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.14** | AI-Driven Baseball Analytics Platform
+**Version 2.15** | AI-Driven Baseball Analytics Platform
 
 ---
 
@@ -739,13 +739,16 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 - **AI Service:** Ephemeral - saved to `/tmp/dm_uploads` during processing
 - **Cleanup:** Backend automatically deletes temp files in `finally` block of background task.
 
-### 💾 Database Persistence (DM-10)
+### 💾 Database Persistence (DM-10, DM-56)
 
 **Provider:** Render PostgreSQL (Managed)
 
 **Schema:**
 - `users` - User accounts (id, email, username, created_at, updated_at)
-- `swings` - Swing video metadata (id, user_id FK, filename, video_url, created_at)
+- `swings` - Swing video metadata with status tracking
+  - Core: id, user_id FK, filename, video_url, created_at
+  - **DM-56:** status (ENUM: pending/processing/completed/failed), error_message
+  - **DM-57:** title, notes (for user-friendly swing management)
 - `analysis_results` - AI analysis data (id, swing_id FK, skeletal_data JSONB, total_frames, fps, bat_trail JSONB, etc.)
 
 **Features:**
@@ -754,6 +757,10 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 - Connection pooling (`pool_pre_ping=True`, `pool_size=5`, `max_overflow=10`)
 - SQLite fallback for local development (when `DATABASE_URL` not set)
 - Alembic migrations for version-controlled schema changes
+- **Automated cleanup job** (DM-56): Removes orphaned swings hourly
+  - Deletes swings in processing/pending > 24 hours
+  - Deletes failed swings > 7 days
+  - Runs via APScheduler on backend startup
 
 **Location:**
 - **Local:** SQLite file `backend/diamond_mind.db` (fallback)
