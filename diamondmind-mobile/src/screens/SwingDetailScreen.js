@@ -28,6 +28,14 @@ export default function SwingDetailScreen({ route, navigation }) {
         loadSwingData();
     }, [swingId]);
 
+    // Reload data when screen comes into focus
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            loadSwingData();
+        });
+        return unsubscribe;
+    }, [navigation]);
+
     const loadSwingData = async () => {
         try {
             setLoading(true);
