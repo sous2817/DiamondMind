@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.15** | AI-Driven Baseball Analytics Platform
+**Version 2.16** | AI-Driven Baseball Analytics Platform
 
 ---
 
@@ -644,7 +644,9 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 | `/api/users`                  | POST      | Create new user                  | Query params: `email`, `username`                                   | JSON user object                  |
 | `/api/users/{user_id}`        | GET       | Get user details                 | N/A                                                                 | JSON user object                  |
 | `/api/users/{user_id}/swings` | GET       | Get user's swings                | N/A                                                                 | JSON array of swings              |
-| `/api/swings/{swing_id}/analysis` | GET   | Get swing analysis               | N/A                                                                 | JSON analysis result              |
+| `/api/swings/{swing_id}/analysis` | GET   | Get swing analysis               | N/A                                                                 | JSON analysis result with title/notes |
+| `/api/swings/{swing_id}`      | PATCH     | Update swing metadata (DM-57)    | Query params: `title`, `notes`                                      | JSON updated swing object         |
+| `/api/swings/{swing_id}`      | DELETE    | Delete swing (DM-57)             | N/A                                                                 | JSON `{"deleted": true}`          |
 | `/docs`                       | GET       | FastAPI Swagger documentation    | N/A                                                                 | Interactive API docs              |
 
 ---
@@ -816,6 +818,41 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 - All swing uploads include `user_id` query parameter
 - Swings table has FK to users table with `ON DELETE CASCADE`
 - Analysis results linked to swings via `swing_id` FK
+
+---
+
+### DM-57: Swing History Enhancements (2026-01-06)
+
+**Purpose:** Enable users to view detailed swing analysis, edit metadata, and manage their swing library.
+
+**Database Schema (added in DM-56):**
+- `swings.title` VARCHAR(255) - Custom swing name
+- `swings.notes` TEXT - User notes about the swing
+
+**Backend Endpoints:**
+- `PATCH /api/swings/{swing_id}?title={title}&notes={notes}` - Update swing metadata
+- `DELETE /api/swings/{swing_id}` - Delete swing (cascades to analysis)
+- `GET /api/swings/{swing_id}/analysis` - Returns analysis with title/notes
+
+**Mobile App Features:**
+
+**SwingDetailScreen:**
+- Displays full swing analysis (phase, score, feedback, drill)
+- Shows technical details (frames, FPS)
+- Edit mode for title and notes with save/cancel
+- Delete button with confirmation dialog
+- Auto-refreshes on focus to show latest data
+
+**ProfileScreen Enhancements:**
+- Swing cards show custom title (or filename if no title)
+- Notes preview (2 lines) displayed if available
+- Chevron icon indicates tappable cards
+- Auto-refreshes when returning from detail screen
+
+**Navigation:**
+- ProfileStack navigator enables nested navigation
+- Profile → SwingDetail → back to Profile
+- Focus listeners ensure UI always shows current data
 
 ### 🔐 Service-to-Service Communication
 
