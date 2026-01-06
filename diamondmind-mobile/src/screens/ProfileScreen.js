@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { UserContext } from '../context/UserContext';
 import { SwingService } from '../services/SwingService';
-import { LogOut, Video, Calendar } from 'lucide-react-native';
+import { LogOut, Video, Calendar, ChevronRight } from 'lucide-react-native';
 
 const THEME = {
     bg: '#F8F9FA',
@@ -69,11 +69,21 @@ export default function ProfileScreen({ navigation }) {
                 <Video size={24} color={THEME.accent} />
             </View>
             <View style={styles.swingInfo}>
-                <Text style={styles.swingFilename}>{item.filename}</Text>
+                <Text style={styles.swingTitle}>
+                    {item.title || item.filename}
+                </Text>
+                {item.notes && (
+                    <Text style={styles.swingNotes} numberOfLines={2}>
+                        {item.notes}
+                    </Text>
+                )}
                 <View style={styles.swingMeta}>
                     <Calendar size={12} color={THEME.subtext} />
                     <Text style={styles.swingDate}>{formatDate(item.created_at)}</Text>
                 </View>
+            </View>
+            <View style={styles.swingChevron}>
+                <ChevronRight size={20} color={THEME.subtext} />
             </View>
         </TouchableOpacity>
     );
@@ -235,11 +245,17 @@ const styles = StyleSheet.create({
     swingInfo: {
         flex: 1,
     },
-    swingFilename: {
+    swingTitle: {
         fontSize: 16,
         fontWeight: '600',
         color: THEME.primary,
         marginBottom: 4,
+    },
+    swingNotes: {
+        fontSize: 14,
+        color: THEME.subtext,
+        marginBottom: 6,
+        lineHeight: 18,
     },
     swingMeta: {
         flexDirection: 'row',
@@ -249,6 +265,9 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: THEME.subtext,
         marginLeft: 4,
+    },
+    swingChevron: {
+        marginLeft: 8,
     },
     loadingContainer: {
         flex: 1,
