@@ -24,6 +24,16 @@ export default function ProfileScreen({ navigation }) {
         loadSwings();
     }, []);
 
+    // Reload swings when screen comes into focus (after editing/deleting)
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            if (user) {
+                loadSwings();
+            }
+        });
+        return unsubscribe;
+    }, [navigation, user]);
+
     const loadSwings = async () => {
         if (!user?.id) return;
 
