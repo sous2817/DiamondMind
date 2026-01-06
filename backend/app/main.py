@@ -234,7 +234,7 @@ async def get_user_swings(user_id: int, db: Session = Depends(get_db)):
             "title": getattr(swing, 'title', None),  # DM-57: Custom title
             "notes": getattr(swing, 'notes', None),  # DM-57: User notes
             "video_url": swing.video_url,
-            "status": getattr(swing, 'status', 'completed').value if hasattr(swing, 'status') else 'completed',  # DM-56: Status tracking
+            "status": swing.status.value if hasattr(swing, 'status') and swing.status else 'completed',  # DM-56: Status tracking
             "created_at": str(swing.created_at),
             "has_analysis": swing.analysis is not None
         }
