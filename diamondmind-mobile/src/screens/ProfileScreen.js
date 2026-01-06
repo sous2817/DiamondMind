@@ -52,89 +52,75 @@ export default function ProfileScreen() {
     const handleSwingPress = (swing) => {
         navigation.navigate('SwingDetail', { swingId: swing.id });
     };
-    console.log(`📹 Loading swing ${swing.id}: ${swing.filename}`);
-    // Fetch the analysis for this swing
-    const analysis = await SwingService.getSwingAnalysis(swing.id);
-    console.log(`✅ Analysis loaded for swing ${swing.id}`);
 
-    // TODO: Navigate to Upload tab and display this analysis
-    // For now, just log it
-    console.log('Analysis data:', analysis);
-    alert(`Swing: ${swing.filename}\nFrames: ${analysis.frames?.length || 0}\nFPS: ${analysis.fps || 'N/A'}`);
-} catch (error) {
-    console.error('Failed to load swing analysis:', error);
-    alert('Failed to load swing analysis. Please try again.');
-}
-    };
-
-const renderSwingItem = ({ item }) => (
-    <TouchableOpacity style={styles.swingCard} onPress={() => handleSwingPress(item)}>
-        <View style={styles.swingIcon}>
-            <Video size={24} color={THEME.accent} />
-        </View>
-        <View style={styles.swingInfo}>
-            <Text style={styles.swingFilename}>{item.filename}</Text>
-            <View style={styles.swingMeta}>
-                <Calendar size={12} color={THEME.subtext} />
-                <Text style={styles.swingDate}>{formatDate(item.created_at)}</Text>
+    const renderSwingItem = ({ item }) => (
+        <TouchableOpacity style={styles.swingCard} onPress={() => handleSwingPress(item)}>
+            <View style={styles.swingIcon}>
+                <Video size={24} color={THEME.accent} />
             </View>
-        </View>
-    </TouchableOpacity>
-);
-
-const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-        <View style={styles.emptyIcon}>
-            <Video size={48} color={THEME.subtext} />
-        </View>
-        <Text style={styles.emptyTitle}>No Swings Yet</Text>
-        <Text style={styles.emptySubtitle}>Upload your first swing to get started!</Text>
-    </View>
-);
-
-return (
-    <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-            <View style={styles.userInfo}>
-                <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{user?.username?.charAt(0).toUpperCase()}</Text>
-                </View>
-                <View style={styles.userDetails}>
-                    <Text style={styles.username}>{user?.username}</Text>
-                    <Text style={styles.email}>{user?.email}</Text>
+            <View style={styles.swingInfo}>
+                <Text style={styles.swingFilename}>{item.filename}</Text>
+                <View style={styles.swingMeta}>
+                    <Calendar size={12} color={THEME.subtext} />
+                    <Text style={styles.swingDate}>{formatDate(item.created_at)}</Text>
                 </View>
             </View>
-            <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-                <LogOut size={20} color={THEME.error} />
-                <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
+    );
 
-        {/* Swing History */}
-        <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Swing History</Text>
-            <Text style={styles.sectionSubtitle}>{swings.length} total swings</Text>
-        </View>
-
-        {loading ? (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={THEME.accent} />
+    const renderEmptyState = () => (
+        <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+                <Video size={48} color={THEME.subtext} />
             </View>
-        ) : (
-            <FlatList
-                data={swings}
-                renderItem={renderSwingItem}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={renderEmptyState}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.accent} />
-                }
-            />
-        )}
-    </View>
-);
+            <Text style={styles.emptyTitle}>No Swings Yet</Text>
+            <Text style={styles.emptySubtitle}>Upload your first swing to get started!</Text>
+        </View>
+    );
+
+    return (
+        <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+                <View style={styles.userInfo}>
+                    <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{user?.username?.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.userDetails}>
+                        <Text style={styles.username}>{user?.username}</Text>
+                        <Text style={styles.email}>{user?.email}</Text>
+                    </View>
+                </View>
+                <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+                    <LogOut size={20} color={THEME.error} />
+                    <Text style={styles.logoutText}>Logout</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Swing History */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Swing History</Text>
+                <Text style={styles.sectionSubtitle}>{swings.length} total swings</Text>
+            </View>
+
+            {loading ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={THEME.accent} />
+                </View>
+            ) : (
+                <FlatList
+                    data={swings}
+                    renderItem={renderSwingItem}
+                    keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={styles.listContainer}
+                    ListEmptyComponent={renderEmptyState}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.accent} />
+                    }
+                />
+            )}
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
