@@ -42,7 +42,7 @@ def upgrade() -> None:
     
     # Backfill existing swings with 'completed' status
     # Use ENUM cast for PostgreSQL, plain string for SQLite
-    if bind.dialect.name == 'postgresql':
+    if conn.dialect.name == 'postgresql':
         op.execute("UPDATE swings SET status = 'completed'::swingstatus WHERE status IS NULL")
     else:
         op.execute("UPDATE swings SET status = 'completed' WHERE status IS NULL")
