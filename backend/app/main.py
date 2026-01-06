@@ -268,6 +268,48 @@ async def get_swing_analysis(swing_id: int, db: Session = Depends(get_db)):
         "created_at": str(analysis.created_at)
     }
 
+@app.patch("/api/swings/{swing_id}")
+async def update_swing(swing_id: int, title: str = None, notes: str = None, db: Session = Depends(get_db)):
+    """Update swing title and/or notes (DM-57)"""
+    swing = db.query(Swing).filter(Swing.id == swing_id).first()
+    if not swing:
+        raise HTTPException(status_code=404, detail="Swing not found")
+    
+    # Update fields if provided
+    if title is not None:
+        swing.title = title
+    if notes is not None:
+        swing.notes = notes
+    
+    db.commit()
+    db.refresh(swing)
+    
+    logger.info(f"Updated swing {swing_id}: title='{swing.title}', notes length={len(swing.notes or '')}")
+    
+    return {
+        "id": swing.id,
+        "title": swing.title,
+        "notes": swing.notes,
+        "updated": True
+    }
+
+@app.delete("/api/swings/{swing_id}")
+async def delete_swing(swing_id: int, db: Session = Depends(get_db)):
+    """Delete a swing and its analysis (DM-57)"""
+    swing = db.query(Swing).filter(Swing.id == swing_id).first()
+    if not swing:
+        raise HTTPException(status_code=404, detail="Swing not found")
+    
+    swing_filename = swing.filename
+    
+    # CASCADE will automatically delete analysis_results due to FK constraint
+    db.delete(swing)
+    db.commit()
+    
+    logger.info(f"Deleted swing {swing_id} (filename: {swing_filename})")
+    
+    return {"deleted": True, "swing_id": swing_id}
+
 # ✅ Proxy Endpoint for Downloads
 @app.get("/api/videos/download/{filename}")
 async def download_video(filename: str):
