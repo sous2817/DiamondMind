@@ -59,6 +59,29 @@ python scripts/sync_jira.py transition DM-10 Done
 python scripts/sync_jira.py transition DM-10 "In Progress"
 ```
 
+### 5. **fetch** - Export Stories by Status
+Fetch and export stories by status for roadmap planning and backlog review.
+
+```powershell
+# Fetch stories by status (print to console)
+python scripts/sync_jira.py fetch "To Do" "In Progress" "Idea"
+
+# Export to JSON file
+python scripts/sync_jira.py fetch "To Do" "In Progress" "Idea" -o backlog.json
+
+# Fetch completed stories
+python scripts/sync_jira.py fetch "Done" -o completed.json
+
+# Fetch single status
+python scripts/sync_jira.py fetch "Testing" -o testing_stories.json
+```
+
+**Output includes:**
+- Story key, summary, status, priority
+- Created/updated timestamps
+- Description and labels (if available)
+- Total count of stories
+
 ## JSON File Format
 
 ### Creating New Stories (no `key` field)
@@ -102,12 +125,13 @@ python scripts/sync_jira.py transition DM-10 "In Progress"
 
 ## Features
 
-✅ **Separate Commands** - Explicit create/update/sync operations
-✅ **File Path Arguments** - Use any JSON file, not just stories.json
-✅ **Dry Run Mode** - Preview changes before applying with `--dry-run`
-✅ **Validation** - Checks for required fields before API calls
-✅ **Better Error Messages** - Clear feedback on what failed and why
-✅ **Summary Stats** - Shows count of created/updated/skipped/errors
+✅ **Separate Commands** - Explicit create/update/sync operations  
+✅ **File Path Arguments** - Use any JSON file, not just stories.json  
+✅ **Dry Run Mode** - Preview changes before applying with `--dry-run`  
+✅ **Validation** - Checks for required fields before API calls  
+✅ **Better Error Messages** - Clear feedback on what failed and why  
+✅ **Summary Stats** - Shows count of created/updated/skipped/errors  
+✅ **Fetch by Status** - Export stories by status for roadmap planning
 
 ## Common Workflows
 
@@ -138,9 +162,22 @@ python scripts/sync_jira.py create
 python scripts/sync_jira.py sync scripts/stories.json
 ```
 
+### Workflow 4: Roadmap Planning
+```powershell
+# 1. Export backlog stories
+python scripts/sync_jira.py fetch "To Do" "In Progress" "Idea" -o backlog.json
+
+# 2. Review exported JSON to plan sprints
+# 3. Prioritize and estimate stories
+
+# 4. Export completed work for retrospective
+python scripts/sync_jira.py fetch "Done" -o sprint_completed.json
+```
+
 ## Tips
 
 - **Always use `--dry-run` first** to preview changes
 - **Use `sync` for mixed operations** (creates new, updates existing)
 - **Use `create` or `update` for explicit control** over what happens
 - **Keep separate files** for different batches of updates (e.g., `dm10_update.json`, `new_features.json`)
+- **Use `fetch` for roadmap planning** - export stories by status to review and prioritize work
