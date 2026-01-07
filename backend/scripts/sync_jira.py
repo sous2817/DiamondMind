@@ -409,10 +409,22 @@ def fetch_stories(statuses, output_file=None):
             print(f"   Status: {issue.fields.status.name} | Priority: {story['priority']}")
             print()
         
-        # Export to JSON if output file specified
-        if output_file:
+        # Export to JSON if output file specified or use default
+        if output_file or len(stories) > 0:
+            # Generate default filename with timestamp if not provided
+            if not output_file:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d")
+                status_slug = "_".join([s.lower().replace(" ", "_") for s in statuses[:2]])  # Use first 2 statuses
+                output_file = f"jira_export_{status_slug}_{timestamp}.json"
+            
+            # Ensure output goes to docs folder
+            docs_dir = os.path.join(os.path.dirname(BASE_DIR), "docs")
+            if not output_file.startswith(docs_dir):
+                output_file = os.path.join(docs_dir, os.path.basename(output_file))
+            
             with open(output_file, 'w') as f:
-                json.dump({"stories": stories, "total": len(stories)}, f, indent=2)
+                json.dump({"stories": stories, "total": len(stories), "exported_at": str(datetime.now())}, f, indent=2)
             print(f"\n💾 Exported {len(stories)} stories to {output_file}")
         
         return stories
