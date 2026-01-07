@@ -364,6 +364,8 @@ def fetch_stories(statuses, output_file=None):
     """
     Fetch JIRA stories by status and optionally export to JSON.
     """
+    from datetime import datetime
+    
     jira = get_jira_client()
     
     # Build JQL query
@@ -413,7 +415,6 @@ def fetch_stories(statuses, output_file=None):
         if output_file or len(stories) > 0:
             # Generate default filename with timestamp if not provided
             if not output_file:
-                from datetime import datetime
                 timestamp = datetime.now().strftime("%Y%m%d")
                 status_slug = "_".join([s.lower().replace(" ", "_") for s in statuses[:2]])  # Use first 2 statuses
                 output_file = f"jira_export_{status_slug}_{timestamp}.json"
