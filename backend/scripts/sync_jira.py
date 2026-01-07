@@ -392,8 +392,6 @@ def fetch_stories(statuses, output_file=None):
                 "summary": issue.fields.summary,
                 "status": issue.fields.status.name,
                 "priority": issue.fields.priority.name if issue.fields.priority else "Medium",
-                "created": str(issue.fields.created),
-                "updated": str(issue.fields.updated),
             }
             
             # Add description if available
@@ -413,11 +411,16 @@ def fetch_stories(statuses, output_file=None):
         
         # Export to JSON if output file specified or use default
         if output_file or len(stories) > 0:
+            timestamp = datetime.now().strftime("%Y%m%d")
+            
             # Generate default filename with timestamp if not provided
             if not output_file:
-                timestamp = datetime.now().strftime("%Y%m%d")
                 status_slug = "_".join([s.lower().replace(" ", "_") for s in statuses[:2]])  # Use first 2 statuses
                 output_file = f"jira_export_{status_slug}_{timestamp}.json"
+            else:
+                # Add timestamp to custom filename (before .json extension)
+                base_name = output_file.replace('.json', '')
+                output_file = f"{base_name}_{timestamp}.json"
             
             # Ensure output goes to docs folder (project root/docs)
             # BASE_DIR is backend/scripts, so go up 2 levels to project root
