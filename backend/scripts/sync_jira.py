@@ -360,6 +360,66 @@ def transition_ticket(ticket_id, target_status="Done"):
     except Exception as e:
         print(f"❌ Error: {e}")
 
+def fetch_stories(statuses, output_file=None):
+    """
+    Fetch JIRA stories by status and optionally export to JSON.
+    """
+    jira = get_jira_client()
+    
+    # Build JQL query
+    status_list = "', '".join(statuses)
+    jql = f"project = {PROJECT_KEY} AND status IN ('{status_list}') ORDER BY created DESC"
+    
+    print(f"🔍 Fetching stories with status: {', '.join(statuses)}")
+    print(f"📝 JQL: {jql}\n")
+    
+    try:
+        issues = jira.search_issues(jql, maxResults=100)
+        
+        if not issues:
+            print(f"❌ No stories found")
+            return
+        
+        print(f"✅ Found {len(issues)} stories\n")
+        
+        # Convert to structured format
+        stories = []
+        for issue in issues:
+            story = {
+                "key": issue.key,
+                "summary": issue.fields.summary,
+                "status": issue.fields.status.name,
+                "priority": issue.fields.priority.name if issue.fields.priority else "Medium",
+                "created": str(issue.fields.created),
+                "updated": str(issue.fields.updated),
+            }
+            
+            # Add description if available
+            if hasattr(issue.fields, 'description') and issue.fields.description:
+                story["description"] = issue.fields.description
+            
+            # Add labels if available
+            if hasattr(issue.fields, 'labels') and issue.fields.labels:
+                story["labels"] = issue.fields.labels
+            
+            stories.append(story)
+            
+            # Print summary
+            print(f"📌 {issue.key}: {issue.fields.summary}")
+            print(f"   Status: {issue.fields.status.name} | Priority: {story['priority']}")
+            print()
+        
+        # Export to JSON if output file specified
+        if output_file:
+            with open(output_file, 'w') as f:
+                json.dump({"stories": stories, "total": len(stories)}, f, indent=2)
+            print(f"\n💾 Exported {len(stories)} stories to {output_file}")
+        
+        return stories
+        
+    except Exception as e:
+        print(f"❌ Error fetching stories: {e}")
+
 def main():
     parser = argparse.ArgumentParser(
         description="JIRA Story Sync Tool - Create, update, or transition JIRA stories",
@@ -405,6 +465,11 @@ Examples:
     transition_parser.add_argument("ticket_id", help="JIRA ticket ID (e.g., DM-10)")
     transition_parser.add_argument("status", nargs="?", default="Done", help="Target status (default: Done)")
     
+    # Fetch command
+    fetch_parser = subparsers.add_parser("fetch", help="Fetch stories by status")
+    fetch_parser.add_argument("statuses", nargs="+", help="Status names (e.g., 'To Do' 'In Progress' 'Idea')")
+    fetch_parser.add_argument("-o", "--output", help="Output JSON file path")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -420,6 +485,8 @@ Examples:
         update_stories_only(args.file, args.dry_run)
     elif args.command == "transition":
         transition_ticket(args.ticket_id, args.status)
+    elif args.command == "fetch":
+        fetch_stories(args.statuses, args.output)
 
 if __name__ == "__main__":
     main()
