@@ -418,8 +418,15 @@ def fetch_stories(statuses, output_file=None):
                 status_slug = "_".join([s.lower().replace(" ", "_") for s in statuses[:2]])  # Use first 2 statuses
                 output_file = f"jira_export_{status_slug}_{timestamp}.json"
             
-            # Ensure output goes to docs folder
-            docs_dir = os.path.join(os.path.dirname(BASE_DIR), "docs")
+            # Ensure output goes to docs folder (project root/docs)
+            # BASE_DIR is backend/scripts, so go up 2 levels to project root
+            project_root = os.path.dirname(os.path.dirname(BASE_DIR))
+            docs_dir = os.path.join(project_root, "docs")
+            
+            # Create docs dir if it doesn't exist
+            os.makedirs(docs_dir, exist_ok=True)
+            
+            # Use only basename if full path provided
             if not output_file.startswith(docs_dir):
                 output_file = os.path.join(docs_dir, os.path.basename(output_file))
             
