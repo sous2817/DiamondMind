@@ -16,6 +16,12 @@ BACKEND_URL = os.environ.get("BACKEND_URL", DEFAULT_BACKEND)
 BAT_HSV_LOWER = list(map(int, os.environ.get("BAT_HSV_LOWER", "0,0,0").split(",")))
 BAT_HSV_UPPER = list(map(int, os.environ.get("BAT_HSV_UPPER", "180,255,50").split(",")))
 
+# 3. Frame Skipping Configuration (DM-28)
+# FRAME_SKIP=1 means process every frame (no skipping)
+# FRAME_SKIP=2 means process every 2nd frame (50% reduction)
+# FRAME_SKIP=3 means process every 3rd frame (67% reduction)
+FRAME_SKIP = int(os.environ.get("FRAME_SKIP", "2"))  # Default: skip every other frame
+
 # Standard MediaPipe 33-point topology connections
 POSE_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 7), (0, 4), (4, 5),
@@ -252,13 +258,37 @@ class PoseExtractor:
             if not success:
                 break
 
-            # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_count += 1  # Increment BEFORE skip check
+            timestamp_ms = ((frame_count - 1) / fps) * 1000  # Adjust for 0-indexed
             
-            # Process Pose
+            # DM-28: Frame skipping logic
+            # Always process first frame and last frame
+            is_first_frame = (frame_count == 1)
+            is_last_frame = (frame_count >= total_frames)
+            should_process = (frame_count % FRAME_SKIP == 0) or is_first_frame or is_last_frame
+            
+            if not should_process:
+                # Skip processing, but still write frame to output video
+                out.write(frame)
+                
+                # Add placeholder to JSON with null landmarks
+                frames.append({
+                    "timestamp": timestamp_ms,
+                    "landmarks": None,  # Skipped frame
+                    "bat_position": None
+                })
+                
+                # Report progress even for skipped frames
+                if job_id and frame_count % 10 == 0:
+                    percent = (frame_count / total_frames) * 100
+                    self.report_progress(job_id, percent)
+                
+                continue
+            
+            # Process frame (only for non-skipped frames)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = self.pose.process(frame_rgb)
             
-            timestamp_ms = (frame_count / fps) * 1000
             landmarks_array = None
             bat_position = None
             
@@ -295,14 +325,14 @@ class PoseExtractor:
                 "bat_position": bat_position
             })
 
-            frame_count += 1
-
+            # Report progress
             if job_id and frame_count % 10 == 0:
                 percent = (frame_count / total_frames) * 100
                 self.report_progress(job_id, percent)
 
             if frame_count % 50 == 0:
-                print(f"   ...Processed {frame_count}/{total_frames} frames ({timestamp_ms:.0f}ms)")
+                processed_count = sum(1 for f in frames if f["landmarks"] is not None)
+                print(f"   ...Read {frame_count}/{total_frames} frames, Processed {processed_count} ({timestamp_ms:.0f}ms)")
 
         cap.release()
         out.release()
@@ -312,10 +342,15 @@ class PoseExtractor:
             
         print(f"✅ Complete. Processed {frame_count} frames.")
         
+        # Calculate processed frames count
+        processed_frames = sum(1 for f in frames if f["landmarks"] is not None)
+        
         return {
             "frames": frames,
             "total_frames": frame_count,
+            "frames_processed": processed_frames,  # DM-28: How many actually processed
             "frames_with_person": valid_frames,
             "fps": fps,
-            "video_filename": output_filename
+            "video_filename": output_filename,
+            "frame_skip": FRAME_SKIP  # DM-28: Document skip rate used
         }
