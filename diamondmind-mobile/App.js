@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { UploadCloud, Maximize2, Minimize2, AlertCircle, X, Zap, ChevronRight, Eye, EyeOff } from 'lucide-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import UploadService from './src/services/UploadService.js';
+import { VideoCompressionService } from './src/services/VideoCompressionService';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
 import BatTrailOverlay from './src/components/BatTrailOverlay';
 import { Config } from './src/config.js';
@@ -116,8 +117,50 @@ const styles = StyleSheet.create({
   errorTextContent: { flex: 1, marginLeft: 12 },
   errorTitle: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   errorMsg: { color: '#94A3B8', fontSize: 12, marginTop: 2 },
-  retryPill: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  retryText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  retryPill: { backgroundColor: THEME.accent, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12 },
+  retryText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+
+  // Compression Overlay (DM-29)
+  compressionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  compressionModal: {
+    backgroundColor: THEME.card,
+    borderRadius: 24,
+    padding: 40,
+    alignItems: 'center',
+    minWidth: 240,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  compressionText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: THEME.primary,
+    marginTop: 20,
+  },
+  compressionProgress: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: THEME.accent,
+    marginTop: 12,
+  },
+  compressionSubtext: {
+    fontSize: 14,
+    color: THEME.subtext,
+    marginTop: 8,
+  },
 
   // Fullscreen
   fullscreenContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000', zIndex: 1000 },
@@ -215,6 +258,9 @@ function MainApp() {
   const [fullscreenDimensions, setFullscreenDimensions] = useState({ width: 0, height: 0 });
   const [showOverlay, setShowOverlay] = useState(true);
   const [showBatTrail, setShowBatTrail] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
 
   // ⚡️ PERFORMANCE: Track current frame index to avoid redundant state updates
   const currentFrameIndexRef = useRef(-1);
@@ -386,22 +432,47 @@ function MainApp() {
   };
 
   const pickVideo = async () => {
-    let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
-    if (res.canceled) return;
-    const asset = res.assets[0];
+    try {
+      let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
+      if (res.canceled) return;
+      const asset = res.assets[0];
 
-    // Reset state
-    setResult(null);
-    setError(null);
+      // Reset state
+      setResult(null);
+      setError(null);
 
-    // Set initial dimensions from asset (will be updated by player when loaded)
-    setVideoDimensions({ width: asset.width, height: asset.height });
-    setSelectedFile(asset.fileName || "swing.mp4");
+      const originalUri = asset.uri;
+      console.log('📹 Video selected:', originalUri);
 
-    // ⚡️ FIX: Only set state here. The useVideoPlayer hook handles the play command.
-    setVideoUri(asset.uri);
+      // Show compression UI
+      setIsCompressing(true);
+      setCompressionProgress(0);
 
-    handleUpload(asset.uri);
+      // Compress video
+      const compressedUri = await VideoCompressionService.compressVideo(
+        originalUri,
+        (progress) => setCompressionProgress(progress)
+      );
+
+      setIsCompressing(false);
+
+      // Set initial dimensions from asset (will be updated by player when loaded)
+      setVideoDimensions({ width: asset.width, height: asset.height });
+      setSelectedFile(asset.fileName || "swing.mp4");
+
+      // ⚡️ FIX: Only set state here. The useVideoPlayer hook handles the play command.
+      setVideoUri(compressedUri);
+
+      handleUpload(compressedUri);
+
+      // Cleanup old temp files (non-blocking)
+      VideoCompressionService.cleanupTempFiles();
+
+    } catch (error) {
+      console.error('❌ Video processing failed:', error);
+      setIsCompressing(false);
+      setError('Failed to process video. Please try again.');
+    }
   };
 
   const handleReset = () => {
@@ -605,6 +676,24 @@ function MainApp() {
                 <TouchableOpacity style={{ marginLeft: 12 }} onPress={() => setError(null)}>
                   <X size={18} color="#64748B" />
                 </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Compression Progress Overlay */}
+            {isCompressing && (
+              <View style={styles.compressionOverlay}>
+                <View style={styles.compressionModal}>
+                  <ActivityIndicator size="large" color={THEME.accent} />
+                  <Text style={styles.compressionText}>
+                    Optimizing Video...
+                  </Text>
+                  <Text style={styles.compressionProgress}>
+                    {compressionProgress}%
+                  </Text>
+                  <Text style={styles.compressionSubtext}>
+                    Preparing for upload
+                  </Text>
+                </View>
               </View>
             )}
 
