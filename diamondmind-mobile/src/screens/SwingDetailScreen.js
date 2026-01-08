@@ -140,9 +140,17 @@ export default function SwingDetailScreen({ route, navigation }) {
                     <Text style={styles.videoFilename}>{analysis.filename}</Text>
                     <TouchableOpacity
                         style={styles.viewVideoButton}
-                        onPress={() => {
-                            // TODO: Navigate to video player or open video
-                            Alert.alert('Video URL', analysis.video_url);
+                        onPress={async () => {
+                            try {
+                                const supported = await Linking.canOpenURL(analysis.video_url);
+                                if (supported) {
+                                    await Linking.openURL(analysis.video_url);
+                                } else {
+                                    Alert.alert('Error', 'Cannot open video URL');
+                                }
+                            } catch (error) {
+                                Alert.alert('Error', 'Failed to open video');
+                            }
                         }}
                     >
                         <Text style={styles.viewVideoText}>📹 View Video</Text>
