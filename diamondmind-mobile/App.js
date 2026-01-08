@@ -3,12 +3,13 @@ import React, { useState, useRef, useEffect, useContext } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { UploadCloud, Maximize2, Minimize2, AlertCircle, X, Zap, ChevronRight, Eye, EyeOff } from 'lucide-react-native';
+import { UploadCloud, Maximize2, Minimize2, AlertCircle, X, Zap, ChevronRight, ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import UploadService from './src/services/UploadService.js';
 import { VideoCompressionService } from './src/services/VideoCompressionService';
 import SkeletonOverlay from './src/components/SkeletonOverlay';
 import BatTrailOverlay from './src/components/BatTrailOverlay';
+import Slider from '@react-native-community/slider';
 import { Config } from './src/config.js';
 import { UserProvider, UserContext } from './src/context/UserContext';
 import { NavigationContainer } from '@react-navigation/native';
@@ -162,6 +163,53 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
+  // DM-59: Scrubbing Controls
+  scrubControls: {
+    backgroundColor: THEME.card,
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  frameInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  frameText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: THEME.primary,
+  },
+  timeText: {
+    fontSize: 14,
+    color: THEME.subtext,
+  },
+  scrubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.border,
+  },
+  scrubSlider: {
+    flex: 1,
+    height: 40,
+  },
+
   // Fullscreen
   fullscreenContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000', zIndex: 1000 },
   closeFab: { position: 'absolute', top: 60, right: 24, backgroundColor: 'rgba(255,255,255,0.2)', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }
@@ -261,6 +309,8 @@ function MainApp() {
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPosition, setScrubPosition] = useState(0); // 0-1 range
 
   // ⚡️ PERFORMANCE: Track current frame index to avoid redundant state updates
   const currentFrameIndexRef = useRef(-1);
@@ -275,7 +325,7 @@ function MainApp() {
   });
 
   useEffect(() => {
-    if (!player || !videoUri || !result) return;
+    if (!player || !videoUri || !result || isScrubbing) return;
     const sub = player.addListener('timeUpdate', (payload) => {
       if (result?.frames && result.fps) {
         // ⚡️ OPTIMIZATION: Use O(1) direct index access instead of O(N) .find()
@@ -291,11 +341,86 @@ function MainApp() {
           if (frame) {
             setCurrentFrameData(frame.landmarks);
           }
+
+          // DM-59: Update scrub position
+          const position = payload.currentTime / (player.duration || 1);
+          setScrubPosition(position);
         }
       }
     });
     return () => sub.remove();
-  }, [player, videoUri, result]);
+  }, [player, videoUri, result, isScrubbing]);
+
+  // DM-59: Scrubbing functions
+  const handleScrubChange = (value) => {
+    setScrubPosition(value);
+
+    if (player && result) {
+      const targetTime = value * (player.duration || 0);
+      player.currentTime = targetTime;
+
+      // Update frame data immediately
+      const frameIndex = Math.floor(targetTime * result.fps);
+      if (frameIndex >= 0 && frameIndex < result.frames.length) {
+        currentFrameIndexRef.current = frameIndex;
+        const frame = result.frames[frameIndex];
+        if (frame) {
+          setCurrentFrameData(frame.landmarks);
+        }
+      }
+    }
+  };
+
+  const handleScrubComplete = () => {
+    setIsScrubbing(false);
+  };
+
+  const stepForward = () => {
+    if (!player || !result) return;
+
+    const currentFrame = currentFrameIndexRef.current;
+    const nextFrame = Math.min(currentFrame + 1, result.total_frames - 1);
+
+    const targetTime = nextFrame / result.fps;
+    player.currentTime = targetTime;
+    player.pause();
+
+    // Update frame data
+    if (nextFrame < result.frames.length) {
+      currentFrameIndexRef.current = nextFrame;
+      const frame = result.frames[nextFrame];
+      if (frame) {
+        setCurrentFrameData(frame.landmarks);
+      }
+    }
+  };
+
+  const stepBackward = () => {
+    if (!player || !result) return;
+
+    const currentFrame = currentFrameIndexRef.current;
+    const prevFrame = Math.max(currentFrame - 1, 0);
+
+    const targetTime = prevFrame / result.fps;
+    player.currentTime = targetTime;
+    player.pause();
+
+    // Update frame data
+    if (prevFrame >= 0 && prevFrame < result.frames.length) {
+      currentFrameIndexRef.current = prevFrame;
+      const frame = result.frames[prevFrame];
+      if (frame) {
+        setCurrentFrameData(frame.landmarks);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // ✅ ALIGNMENT FIX: Update video dimensions from player source
   // This ensures we use the EXACT dimensions MediaPipe analyzed
@@ -638,6 +763,57 @@ function MainApp() {
                       <Maximize2 size={20} color="#FFF" />
                     </TouchableOpacity>
                   </View>
+
+                  {/* DM-59: Video Scrubbing Controls */}
+                  {videoUri && player && (
+                    <View style={styles.scrubControls}>
+                      {/* Frame Info */}
+                      <View style={styles.frameInfo}>
+                        <Text style={styles.frameText}>
+                          Frame {currentFrameIndexRef.current + 1} / {result.total_frames}
+                        </Text>
+                        <Text style={styles.timeText}>
+                          {formatTime(player.currentTime)} / {formatTime(player.duration)}
+                        </Text>
+                      </View>
+
+                      {/* Step Controls + Slider */}
+                      <View style={styles.scrubRow}>
+                        {/* Step Backward */}
+                        <TouchableOpacity
+                          style={styles.stepButton}
+                          onPress={stepBackward}
+                        >
+                          <ChevronLeft size={24} color={THEME.primary} />
+                        </TouchableOpacity>
+
+                        {/* Slider */}
+                        <Slider
+                          style={styles.scrubSlider}
+                          minimumValue={0}
+                          maximumValue={1}
+                          value={scrubPosition}
+                          onValueChange={handleScrubChange}
+                          onSlidingStart={() => {
+                            setIsScrubbing(true);
+                            player.pause();
+                          }}
+                          onSlidingComplete={handleScrubComplete}
+                          minimumTrackTintColor={THEME.accent}
+                          maximumTrackTintColor={THEME.border}
+                          thumbTintColor={THEME.accent}
+                        />
+
+                        {/* Step Forward */}
+                        <TouchableOpacity
+                          style={styles.stepButton}
+                          onPress={stepForward}
+                        >
+                          <ChevronRight size={24} color={THEME.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Attack Angle Metric */}
                   {attackAngle !== null && (

@@ -1,0 +1,57 @@
+{
+    "stories": [
+        {
+            "summary": "Frame-by-Frame Video Scrubbing",
+            "priority": {
+                "name": "High"
+            },
+            "labels": [
+                "Frontend",
+                "Mobile",
+                "UX"
+            ],
+            "details": {
+                "user_story": "As a User, I want to scrub through my swing video frame-by-frame so that I can analyze specific moments in detail.",
+                "context": "Currently, users can only play/pause the video. For detailed analysis, they need the ability to:\n- Scrub through the video using a slider\n- Step forward/backward one frame at a time\n- See the skeleton overlay update in sync with the current frame\n\nThis feature enables coaches and players to examine critical moments like contact point, follow-through, and specific mechanical flaws.",
+                "acceptance_criteria": [
+                    "Add a slider component below the video player",
+                    "Slider syncs with current video playback position",
+                    "Dragging slider updates video position and skeleton overlay",
+                    "Add step forward button (advance 1 frame)",
+                    "Add step backward button (go back 1 frame)",
+                    "Skeleton overlay updates to match current frame",
+                    "Display current frame number and timestamp",
+                    "Works in both normal and fullscreen modes",
+                    "Smooth scrubbing performance (no lag)"
+                ],
+                "technical_details": [
+                    "Use expo-video player API for frame-level control",
+                    "Calculate frame index from current playback time",
+                    "Update skeleton overlay based on frame index",
+                    "Add Slider component from React Native",
+                    "Add step buttons with ChevronLeft/ChevronRight icons",
+                    "",
+                    "Implementation:",
+                    "- Get current playback time from player.currentTime",
+                    "- Calculate frame index: Math.floor(currentTime * fps)",
+                    "- Seek to specific frame: player.currentTime = frameIndex / fps",
+                    "- Update skeleton overlay when frame changes",
+                    "",
+                    "UI Layout:",
+                    "- Slider below video (full width)",
+                    "- Step buttons on either side of slider",
+                    "- Frame counter display (e.g., 'Frame 45 / 900')",
+                    "- Timestamp display (e.g., '1.5s / 30.0s')"
+                ],
+                "edge_cases": [
+                    "Video not loaded - disable scrubbing controls",
+                    "No analysis data - show video only, no skeleton",
+                    "Scrubbing while video is playing - pause first",
+                    "Rapid scrubbing - debounce skeleton updates",
+                    "Frame boundaries - clamp to valid range [0, totalFrames-1]",
+                    "Different frame rates - calculate correctly for 30fps, 60fps, etc."
+                ]
+            }
+        }
+    ]
+}
