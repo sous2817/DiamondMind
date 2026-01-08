@@ -267,6 +267,8 @@ async def get_swing_analysis(swing_id: int, db: Session = Depends(get_db)):
         "drill_explanation": analysis.drill_explanation,
         "title": swing.title,  # DM-57: Include swing metadata
         "notes": swing.notes,  # DM-57: Include swing metadata
+        "video_url": swing.video_url,  # Include video URL for playback
+        "filename": swing.filename,  # Include original filename
         "created_at": str(analysis.created_at)
     }
 
