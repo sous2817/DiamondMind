@@ -138,23 +138,16 @@ export default function SwingDetailScreen({ route, navigation }) {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Video</Text>
                     <Text style={styles.videoFilename}>{analysis.filename}</Text>
-                    <TouchableOpacity
-                        style={styles.viewVideoButton}
-                        onPress={async () => {
-                            try {
-                                const supported = await Linking.canOpenURL(analysis.video_url);
-                                if (supported) {
-                                    await Linking.openURL(analysis.video_url);
-                                } else {
-                                    Alert.alert('Error', 'Cannot open video URL');
-                                }
-                            } catch (error) {
-                                Alert.alert('Error', 'Failed to open video');
-                            }
-                        }}
-                    >
-                        <Text style={styles.viewVideoText}>📹 View Video</Text>
-                    </TouchableOpacity>
+
+                    {/* Video URL Display */}
+                    <View style={styles.urlContainer}>
+                        <Text style={styles.urlLabel}>Server Path:</Text>
+                        <Text style={styles.urlText} selectable>{analysis.video_url}</Text>
+                    </View>
+
+                    <Text style={styles.videoNote}>
+                        💡 Video is stored on the server. Full video playback coming soon!
+                    </Text>
                 </View>
             )}
 
@@ -405,15 +398,27 @@ const styles = StyleSheet.create({
         color: '#666',
         marginBottom: 12,
     },
-    viewVideoButton: {
-        backgroundColor: '#007AFF',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
+    urlContainer: {
+        backgroundColor: '#f5f5f5',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 12,
     },
-    viewVideoText: {
-        color: '#fff',
-        fontSize: 16,
+    urlLabel: {
+        fontSize: 12,
         fontWeight: '600',
+        color: '#666',
+        marginBottom: 4,
+    },
+    urlText: {
+        fontSize: 12,
+        color: '#333',
+        fontFamily: 'monospace',
+    },
+    videoNote: {
+        fontSize: 13,
+        color: '#666',
+        fontStyle: 'italic',
+        textAlign: 'center',
     },
 });
