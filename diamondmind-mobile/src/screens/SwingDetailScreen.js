@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     Alert,
     ActivityIndicator,
+    Linking,
 } from 'react-native';
 import { SwingService } from '../services/SwingService';
 
