@@ -132,6 +132,23 @@ export default function SwingDetailScreen({ route, navigation }) {
                 </Text>
             </View>
 
+            {/* Video Section */}
+            {analysis.video_url && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Video</Text>
+                    <Text style={styles.videoFilename}>{analysis.filename}</Text>
+                    <TouchableOpacity
+                        style={styles.viewVideoButton}
+                        onPress={() => {
+                            // TODO: Navigate to video player or open video
+                            Alert.alert('Video URL', analysis.video_url);
+                        }}
+                    >
+                        <Text style={styles.viewVideoText}>📹 View Video</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Edit/Delete Actions */}
             <View style={styles.actions}>
                 {!isEditing ? (
