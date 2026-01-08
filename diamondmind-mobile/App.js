@@ -385,6 +385,10 @@ function MainApp() {
     player.currentTime = targetTime;
     player.pause();
 
+    // Update scrub position
+    const position = targetTime / (player.duration || 1);
+    setScrubPosition(position);
+
     // Update frame data
     if (nextFrame < result.frames.length) {
       currentFrameIndexRef.current = nextFrame;
@@ -404,6 +408,10 @@ function MainApp() {
     const targetTime = prevFrame / result.fps;
     player.currentTime = targetTime;
     player.pause();
+
+    // Update scrub position
+    const position = targetTime / (player.duration || 1);
+    setScrubPosition(position);
 
     // Update frame data
     if (prevFrame >= 0 && prevFrame < result.frames.length) {
