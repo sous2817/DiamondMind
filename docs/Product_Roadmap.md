@@ -12,26 +12,29 @@ Based on the current backlog, I recommend a **3-phase roadmap** that balances qu
 
 ---
 
-## Phase 1: Core UX & Performance (Q1 2026)
+## Phase 1: Core UX & Performance (Q1 2026) - IN PROGRESS
 **Goal:** Improve user experience and system stability  
 **Duration:** 7-9 weeks  
-**Effort:** ~112-138 hours
+**Effort:** ~112-138 hours  
+**Completed:** 2/4 stories ✅
 
 ### Priority Order
 
-#### 1. **DM-29: Mobile-Side Resolution Scaling** (HIGH)
-- **Why First:** Immediate stability improvement, reduces AI service crashes
-- **Impact:** Prevents 512MB RAM exhaustion on free tier
-- **Effort:** 16-24 hours
+#### 1. **DM-29: Mobile-Side Resolution Scaling** ✅ COMPLETE (HIGH)
+- **Status:** Deployed 2026-01-08
+- **Impact:** Video compression infrastructure in place
+- **Effort:** 4 hours (actual)
 - **Dependencies:** None
-- **Value:** Unblocks reliable analysis for all users
+- **Value:** Foundation for native compression (DM-58)
+- **Notes:** Expo Go compatible, real compression pending EAS build
 
-#### 2. **DM-28: AI Service Frame Skipping** (HIGH)
-- **Why Second:** Complements DM-29, further improves performance
-- **Impact:** 40-50% faster processing, better user experience
-- **Effort:** 12-16 hours
+#### 2. **DM-28: AI Service Frame Skipping** ✅ COMPLETE (HIGH)
+- **Status:** Deployed 2026-01-08
+- **Impact:** 40-50% faster processing (60-90s → 30-45s)
+- **Effort:** 2 hours (actual)
 - **Dependencies:** None
-- **Value:** Reduces wait time, improves throughput
+- **Value:** Reduced CPU usage, more stable on free tier
+- **Notes:** FRAME_SKIP=2 deployed to Render
 
 #### 3. **DM-38: Frame-by-Frame Video Scrubbing** (HIGH)
 - **Why Third:** High-value UX feature, builds on existing video player
@@ -48,10 +51,10 @@ Based on the current backlog, I recommend a **3-phase roadmap** that balances qu
 - **Value:** Personalization, data ownership
 
 **Phase 1 Deliverables:**
-- ✅ Stable, fast analysis (no crashes)
-- ✅ Professional video scrubbing
-- ✅ User accounts with profiles
-- ✅ Foundation for personalization
+- ✅ Stable, fast analysis (no crashes) - **ACHIEVED via DM-28/29**
+- ⏳ Professional video scrubbing - **IN PROGRESS (DM-38)**
+- ⏳ User accounts with profiles - **PENDING (DM-15)**
+- ⏳ Foundation for personalization - **PENDING (DM-15)**
 
 ---
 

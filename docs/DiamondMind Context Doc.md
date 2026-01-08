@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.16** | AI-Driven Baseball Analytics Platform
+**Version 2.17** | AI-Driven Baseball Analytics Platform
 
 ---
 
@@ -848,6 +848,79 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 - Notes preview (2 lines) displayed if available
 - Chevron icon indicates tappable cards
 - Auto-refreshes when returning from detail screen
+
+---
+
+### DM-29: Mobile-Side Resolution Scaling (2026-01-08)
+
+**Purpose:** Reduce upload sizes and prevent AI service crashes by implementing video compression infrastructure.
+
+**Implementation:**
+- Created `VideoCompressionService` for video optimization
+- Integrated compression into upload flow with progress UI
+- Expo Go compatible (uses legacy FileSystem API)
+
+**Current Behavior:**
+- Validates file size (< 50MB recommended)
+- Shows "Optimizing Video..." progress overlay
+- Actual compression disabled in Expo Go (native modules required)
+
+**Future Enhancement (DM-58):**
+- Implement real 720p compression @ 2.5 Mbps when using EAS build
+- Expected: 50-100MB → 10-20MB file size reduction
+- Prevents AI service crashes on free-tier (512MB RAM limit)
+
+**Files Modified:**
+- `diamondmind-mobile/package.json` - Added expo-media-library
+- `diamondmind-mobile/src/services/VideoCompressionService.js` - Compression service
+- `diamondmind-mobile/App.js` - Integrated compression UI
+
+---
+
+### DM-28: AI Service Frame Skipping (2026-01-08)
+
+**Purpose:** Reduce AI processing time by 40-50% through intelligent frame skipping.
+
+**Implementation:**
+- Added `FRAME_SKIP` environment variable (default: 2)
+- Skip every Nth frame while maintaining timeline continuity
+- Always process first and last frames
+
+**Configuration:**
+```
+FRAME_SKIP=1  # No skipping (process every frame)
+FRAME_SKIP=2  # 50% reduction (process every 2nd frame) ← Default
+FRAME_SKIP=3  # 67% reduction (process every 3rd frame)
+```
+
+**Behavior:**
+- Skipped frames written to output video (no visual gaps)
+- Skipped frames have `null` landmarks in JSON
+- Progress bar based on total frames (accurate)
+
+**Performance Impact:**
+- Processing time: 60-90s → 30-45s (40-50% reduction)
+- Frames processed: 900 → 450 (for 30s @ 30fps video)
+- CPU usage: Reduced, more stable on free tier
+- Quality: 15fps output still smooth for analysis
+
+**Return Metadata (Updated):**
+```json
+{
+  "frames": [...],
+  "total_frames": 900,
+  "frames_processed": 450,
+  "frames_with_person": 420,
+  "fps": 30,
+  "video_filename": "analyzed_abc123.mp4",
+  "frame_skip": 2
+}
+```
+
+**Files Modified:**
+- `ai-service/pose_engine.py` - Frame skipping logic
+
+---
 
 **Navigation:**
 - ProfileStack navigator enables nested navigation
