@@ -391,4 +391,20 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#333',
     },
+    videoFilename: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 12,
+    },
+    viewVideoButton: {
+        backgroundColor: '#007AFF',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    viewVideoText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });
