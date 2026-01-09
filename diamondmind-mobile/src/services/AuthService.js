@@ -21,12 +21,12 @@ export const AuthService = {
         try {
             console.log('🔐 Signing up with Supabase:', email);
 
-            // Sign up with Supabase (email confirmation disabled for MVP)
+            // Sign up with Supabase
             const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
-                    emailRedirectTo: undefined, // No email confirmation
+                    emailRedirectTo: undefined, // No email confirmation redirect
                 }
             });
 
@@ -35,11 +35,17 @@ export const AuthService = {
                 throw new Error(error.message);
             }
 
-            if (!data.user || !data.session) {
-                throw new Error('Signup failed: No user or session returned');
+            if (!data.user) {
+                throw new Error('Signup failed: No user returned');
             }
 
             console.log('✅ Supabase signup successful:', data.user.email);
+
+            // Check if email confirmation is required
+            if (!data.session) {
+                console.log('📧 Email confirmation required - please check your email');
+                throw new Error('Please check your email to confirm your account before logging in');
+            }
 
             // Save session to AsyncStorage
             await this.saveUserSession(data.session);

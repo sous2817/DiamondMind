@@ -40,8 +40,19 @@ async def get_current_user(
     """
     token = credentials.credentials
     
+    logger.info(f"🔑 Attempting to verify token for /api/profile")
+    
     # Verify token with Supabase
-    supabase_user = verify_token(token)
+    try:
+        supabase_user = verify_token(token)
+    except Exception as e:
+        logger.error(f"❌ Token verification exception: {str(e)}")
+        logger.exception("Full traceback:")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token verification failed: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     if not supabase_user:
         logger.warning("⚠️ Authentication failed: invalid token")
