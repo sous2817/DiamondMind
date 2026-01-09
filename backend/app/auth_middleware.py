@@ -72,25 +72,37 @@ async def get_current_user(
         # User exists in Supabase but not in local DB - create them
         logger.info(f"🆕 Creating new user in local DB: {email}")
         
-        # Generate username from email (before @ symbol)
-        username = email.split("@")[0]
-        
-        # Ensure username is unique
-        base_username = username
-        counter = 1
-        while db.query(User).filter(User.username == username).first():
-            username = f"{base_username}{counter}"
-            counter += 1
-        
-        user = User(
-            supabase_id=supabase_id,
-            email=email,
-            username=username
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        logger.info(f"✅ User created: {user.username} (ID: {user.id})")
+        try:
+            # Generate username from email (before @ symbol)
+            username = email.split("@")[0]
+            
+            # Ensure username is unique
+            base_username = username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            logger.info(f"📝 Creating user with username: {username}, supabase_id: {supabase_id}")
+            
+            user = User(
+                supabase_id=supabase_id,
+                email=email,
+                username=username
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            logger.info(f"✅ User created successfully: {user.username} (ID: {user.id})")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create user: {str(e)}")
+            logger.exception("Full traceback:")
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create user: {str(e)}"
+            )
     
     return user
 
