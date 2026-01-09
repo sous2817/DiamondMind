@@ -381,6 +381,9 @@ function MainApp() {
     const currentFrame = currentFrameIndexRef.current;
     const nextFrame = Math.min(currentFrame + 1, result.total_frames - 1);
 
+    // Prevent timeUpdate listener from interfering
+    setIsScrubbing(true);
+
     const targetTime = nextFrame / result.fps;
     player.currentTime = targetTime;
     player.pause();
@@ -389,7 +392,7 @@ function MainApp() {
     const position = targetTime / (player.duration || 1);
     setScrubPosition(position);
 
-    // Update frame data
+    // Update frame data immediately
     if (nextFrame < result.frames.length) {
       currentFrameIndexRef.current = nextFrame;
       const frame = result.frames[nextFrame];
@@ -397,6 +400,9 @@ function MainApp() {
         setCurrentFrameData(frame.landmarks);
       }
     }
+
+    // Re-enable timeUpdate listener after a short delay
+    setTimeout(() => setIsScrubbing(false), 100);
   };
 
   const stepBackward = () => {
@@ -404,6 +410,9 @@ function MainApp() {
 
     const currentFrame = currentFrameIndexRef.current;
     const prevFrame = Math.max(currentFrame - 1, 0);
+
+    // Prevent timeUpdate listener from interfering
+    setIsScrubbing(true);
 
     const targetTime = prevFrame / result.fps;
     player.currentTime = targetTime;
@@ -413,7 +422,7 @@ function MainApp() {
     const position = targetTime / (player.duration || 1);
     setScrubPosition(position);
 
-    // Update frame data
+    // Update frame data immediately
     if (prevFrame >= 0 && prevFrame < result.frames.length) {
       currentFrameIndexRef.current = prevFrame;
       const frame = result.frames[prevFrame];
@@ -421,6 +430,9 @@ function MainApp() {
         setCurrentFrameData(frame.landmarks);
       }
     }
+
+    // Re-enable timeUpdate listener after a short delay
+    setTimeout(() => setIsScrubbing(false), 100);
   };
 
   const formatTime = (seconds) => {
