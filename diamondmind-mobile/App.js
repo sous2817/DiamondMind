@@ -325,8 +325,12 @@ function MainApp() {
   });
 
   useEffect(() => {
-    if (!player || !videoUri || !result || isScrubbing) return;
+    if (!player || !videoUri || !result) return;
     const sub = player.addListener('timeUpdate', (payload) => {
+      // DM-59: Only update frames automatically when video is playing
+      // This allows manual stepping to work without interference
+      if (!player.playing) return;
+
       if (result?.frames && result.fps) {
         // ⚡️ OPTIMIZATION: Use O(1) direct index access instead of O(N) .find()
         // This eliminates the "loop over all frames" jitter
@@ -349,7 +353,7 @@ function MainApp() {
       }
     });
     return () => sub.remove();
-  }, [player, videoUri, result, isScrubbing]);
+  }, [player, videoUri, result]);
 
   // DM-59: Scrubbing functions
   const handleScrubChange = (value) => {
@@ -381,12 +385,12 @@ function MainApp() {
     const currentFrame = currentFrameIndexRef.current;
     const nextFrame = Math.min(currentFrame + 1, result.total_frames - 1);
 
-    // Prevent timeUpdate listener from interfering
-    setIsScrubbing(true);
+    // Pause video to prevent automatic playback
+    player.pause();
 
+    // Seek to target frame
     const targetTime = nextFrame / result.fps;
     player.currentTime = targetTime;
-    player.pause();
 
     // Update scrub position
     const position = targetTime / (player.duration || 1);
@@ -400,9 +404,6 @@ function MainApp() {
         setCurrentFrameData(frame.landmarks);
       }
     }
-
-    // Re-enable timeUpdate listener after video has settled
-    setTimeout(() => setIsScrubbing(false), 300);
   };
 
   const stepBackward = () => {
@@ -411,12 +412,12 @@ function MainApp() {
     const currentFrame = currentFrameIndexRef.current;
     const prevFrame = Math.max(currentFrame - 1, 0);
 
-    // Prevent timeUpdate listener from interfering
-    setIsScrubbing(true);
+    // Pause video to prevent automatic playback
+    player.pause();
 
+    // Seek to target frame
     const targetTime = prevFrame / result.fps;
     player.currentTime = targetTime;
-    player.pause();
 
     // Update scrub position
     const position = targetTime / (player.duration || 1);
@@ -430,9 +431,6 @@ function MainApp() {
         setCurrentFrameData(frame.landmarks);
       }
     }
-
-    // Re-enable timeUpdate listener after video has settled
-    setTimeout(() => setIsScrubbing(false), 300);
   };
 
   const formatTime = (seconds) => {
