@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.18** | AI-Driven Baseball Analytics Platform
+**Version 2.19** | AI-Driven Baseball Analytics Platform
 
 ---
 
@@ -471,6 +471,8 @@ Follow these exact specifications if redeploying to Render.
 - `PYTHON_VERSION = 3.11.0` (or 3.12 if upgraded)
 - `AI_SERVICE_URL = https://dm-ai-service.onrender.com`
 - `DATABASE_URL = postgresql://...` (Render PostgreSQL Internal URL)
+- `SUPABASE_URL = https://zgwxrfetbplatwpimmec.supabase.co` (DM-15: Authentication)
+- `SUPABASE_SERVICE_KEY = eyJhbGci...` (DM-15: JWT verification - keep secret!)
 
 **Dependencies:** `requirements.txt` includes:
 
@@ -648,6 +650,21 @@ Write-Host "✅ Done! Map saved to '$outputPath'" -ForegroundColor Green
 | `/api/swings/{swing_id}`      | PATCH     | Update swing metadata (DM-57)    | Query params: `title`, `notes`                                      | JSON updated swing object         |
 | `/api/swings/{swing_id}`      | DELETE    | Delete swing (DM-57)             | N/A                                                                 | JSON `{"deleted": true}`          |
 | `/docs`                       | GET       | FastAPI Swagger documentation    | N/A                                                                 | Interactive API docs              |
+
+**DM-15 Updates (Supabase Authentication):**
+- **NEW:** `GET /api/profile` - Get authenticated user's profile (requires JWT token)
+- **NEW:** `PATCH /api/profile` - Update profile fields: age_group, handedness, height_cm (requires JWT token)
+- **NEW:** `GET /api/swings` - Get authenticated user's swings (requires JWT token, replaces `/api/users/{user_id}/swings`)
+- **UPDATED:** `POST /api/videos/upload` - Now accepts optional `Authorization: Bearer {token}` header
+- **DEPRECATED:** `POST /api/users` - Use Supabase signup instead
+- **DEPRECATED:** `GET /api/auth/login` - Use Supabase login instead
+- **LEGACY:** `/api/users/{user_id}/swings` - Still available for backward compatibility, but use `/api/swings` instead
+
+**Authentication:**
+- All authenticated endpoints require `Authorization: Bearer {jwt_token}` header
+- JWT tokens obtained from Supabase client (mobile app)
+- Backend verifies tokens using Supabase service role key
+- Users auto-created in local database on first authenticated request
 
 ---
 

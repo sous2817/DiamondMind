@@ -1,0 +1,25 @@
+{
+    "defaults": {
+        "labels": [
+            "authentication",
+            "supabase",
+            "backend",
+            "mobile"
+        ],
+        "priority": "High"
+    },
+    "stories": [
+        {
+            "key": "DM-15",
+            "summary": "Feature: User Profile System",
+            "priority": "High",
+            "details": {
+                "user_story": "As a user, I want to create a profile with my age group, handedness, and height so that I can receive personalized coaching feedback tailored to my demographic and physical attributes.",
+                "context": "**COMPLETED** - Implemented Supabase authentication with user profiles.\n\n**What was implemented:**\n- Supabase Auth integration for secure password-based authentication\n- JWT token-based API authentication\n- User profile fields: age_group (10u/12u/14u/16u/18u/college/adult), handedness (left/right/switch), height_cm\n- Auto-creation of users in local database on first login\n- Profile endpoints: GET /api/profile, PATCH /api/profile\n- Updated video upload to use authentication\n- Updated swings endpoint to use authentication (GET /api/swings)\n- Mobile app integration with Supabase client\n- Session persistence with auto-refresh\n\n**Breaking Changes:**\n- Old email-only authentication replaced with password-based auth\n- Existing users need to re-register through Supabase\n- Swings endpoint changed from /api/users/{user_id}/swings to /api/swings (authenticated)\n\n**Environment Variables Added:**\n- Backend: SUPABASE_URL, SUPABASE_SERVICE_KEY\n- Mobile: SUPABASE_URL, SUPABASE_ANON_KEY\n\n**Files Modified:**\n- Backend: 7 files (supabase_client.py, auth_middleware.py, models.py, main.py, requirements.txt, .env.example, migration)\n- Mobile: 8 files (AuthService.js, UserContext.js, LoginScreen.js, SignupScreen.js, UploadService.js, SwingService.js, ProfileScreen.js, config files)\n\n**Status:** ✅ Complete and deployed to production",
+                "acceptance_criteria": "- [x] Users can sign up with email and password via Supabase\n- [x] Users can log in with email and password\n- [x] JWT tokens are used for API authentication\n- [x] Users are auto-created in local database on first login\n- [x] Profile endpoint returns user data (email, username, age_group, handedness, height_cm)\n- [x] Profile endpoint allows updating age_group, handedness, height_cm\n- [x] Video uploads include authentication\n- [x] Swings endpoint uses authentication\n- [x] Session persists across app restarts\n- [x] Mobile app integrates with Supabase\n- [x] All tests passing",
+                "technical_details": "**Backend Architecture:**\n- Supabase client singleton for JWT verification\n- FastAPI dependency injection for authentication (get_current_user, get_optional_user)\n- User model extended with supabase_id (UUID), age_group (enum), handedness (enum), height_cm (integer)\n- Alembic migration: 87958b8ee2f6_add_user_profile_fields\n\n**Mobile Architecture:**\n- Supabase client configured with anon key\n- AuthService rewritten for Supabase (signup, login, logout, fetchProfile, updateProfile)\n- UserContext listens to Supabase auth state changes\n- JWT tokens included in Authorization headers for API calls\n\n**Security:**\n- Service role key (backend only) for JWT verification\n- Anon key (mobile app) for client-side auth\n- Row-level security ready for future implementation\n\n**Database Schema:**\n- users.supabase_id: VARCHAR(255), unique, indexed\n- users.age_group: ENUM agegroup\n- users.handedness: ENUM handedness\n- users.height_cm: INTEGER\n\n**API Changes:**\n- NEW: GET /api/profile (requires auth)\n- NEW: PATCH /api/profile (requires auth)\n- NEW: GET /api/swings (requires auth, replaces /api/users/{user_id}/swings)\n- UPDATED: POST /api/videos/upload (now uses optional auth)\n- REMOVED: POST /api/users (replaced by Supabase signup)\n- REMOVED: GET /api/auth/login (replaced by Supabase login)",
+                "edge_cases": "**Handled:**\n- Enum case mismatch (database lowercase vs Python uppercase) - fixed by removing default value\n- User creation failure when email already exists - handled with proper error messages\n- Missing alembic_version table - gracefully handled\n- Email confirmation required - documented workaround (disable in Supabase settings)\n- Existing users with NULL supabase_id - documented migration path\n\n**Known Limitations:**\n- Existing users must re-register (breaking change)\n- Email confirmation must be disabled for MVP (or users must confirm via email)\n- Profile fields are optional (can be NULL)\n- No profile UI for editing fields yet (endpoint exists, UI pending)"
+            }
+        }
+    ]
+}
