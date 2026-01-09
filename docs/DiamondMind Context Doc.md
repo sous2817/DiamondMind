@@ -1,6 +1,6 @@
 # DiamondMind Master Context
 
-**Version 2.17** | AI-Driven Baseball Analytics Platform
+**Version 2.18** | AI-Driven Baseball Analytics Platform
 
 ---
 

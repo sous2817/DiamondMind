@@ -16,7 +16,7 @@ Based on the current backlog, I recommend a **3-phase roadmap** that balances qu
 **Goal:** Improve user experience and system stability  
 **Duration:** 7-9 weeks  
 **Effort:** ~112-138 hours  
-**Completed:** 2/4 stories ✅
+**Completed:** 3/4 stories ✅
 
 ### Priority Order
 
@@ -36,12 +36,13 @@ Based on the current backlog, I recommend a **3-phase roadmap** that balances qu
 - **Value:** Reduced CPU usage, more stable on free tier
 - **Notes:** FRAME_SKIP=2 deployed to Render
 
-#### 3. **DM-38: Frame-by-Frame Video Scrubbing** (HIGH)
-- **Why Third:** High-value UX feature, builds on existing video player
-- **Impact:** Enables detailed swing analysis
-- **Effort:** 24-32 hours
-- **Dependencies:** None (enhances existing player)
-- **Value:** Differentiating feature for serious players
+#### 3. **DM-59: Frame-by-Frame Video Scrubbing** ✅ COMPLETE (HIGH)
+- **Status:** Deployed 2026-01-08
+- **Impact:** Enables precise frame-by-frame swing analysis
+- **Effort:** 8 hours (actual, including debugging)
+- **Dependencies:** None
+- **Value:** Professional video analysis tool, differentiating feature
+- **Notes:** Slider + step buttons, skeleton overlay synced
 
 #### 4. **DM-15: User Profile System** (HIGH)
 - **Why Fourth:** Foundation for personalization, enables future features
@@ -52,7 +53,7 @@ Based on the current backlog, I recommend a **3-phase roadmap** that balances qu
 
 **Phase 1 Deliverables:**
 - ✅ Stable, fast analysis (no crashes) - **ACHIEVED via DM-28/29**
-- ⏳ Professional video scrubbing - **IN PROGRESS (DM-38)**
+- ✅ Professional video scrubbing - **ACHIEVED via DM-59**
 - ⏳ User accounts with profiles - **PENDING (DM-15)**
 - ⏳ Foundation for personalization - **PENDING (DM-15)**
 
