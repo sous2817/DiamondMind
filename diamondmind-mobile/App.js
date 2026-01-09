@@ -401,8 +401,8 @@ function MainApp() {
       }
     }
 
-    // Re-enable timeUpdate listener after a short delay
-    setTimeout(() => setIsScrubbing(false), 100);
+    // Re-enable timeUpdate listener after video has settled
+    setTimeout(() => setIsScrubbing(false), 300);
   };
 
   const stepBackward = () => {
@@ -431,8 +431,8 @@ function MainApp() {
       }
     }
 
-    // Re-enable timeUpdate listener after a short delay
-    setTimeout(() => setIsScrubbing(false), 100);
+    // Re-enable timeUpdate listener after video has settled
+    setTimeout(() => setIsScrubbing(false), 300);
   };
 
   const formatTime = (seconds) => {
