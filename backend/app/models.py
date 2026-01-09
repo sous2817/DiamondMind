@@ -37,7 +37,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False)
     
     # Profile fields (DM-15)
-    age_group = Column(Enum(AgeGroup), nullable=True, default=AgeGroup.ADULT)
+    age_group = Column(Enum(AgeGroup), nullable=True)
     handedness = Column(Enum(Handedness), nullable=True)
     height_cm = Column(Integer, nullable=True)  # Height in centimeters
     
