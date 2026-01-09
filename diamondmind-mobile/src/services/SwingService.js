@@ -1,18 +1,25 @@
 import axios from 'axios';
 import { Config } from '../config';
+import { AuthService } from './AuthService';
 
 export const SwingService = {
     /**
-     * Get all swings for a user
-     * @param {number} userId - User ID
+     * Get all swings for the authenticated user
      * @returns {Promise<Array>} Array of swing objects
      */
-    async getUserSwings(userId) {
+    async getUserSwings() {
         try {
+            const accessToken = await AuthService.getAccessToken();
+
             const response = await axios.get(
-                `${Config.API_BASE_URL}/api/users/${userId}/swings`
+                `${Config.API_BASE_URL}/api/swings`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                }
             );
-            console.log(`✅ Fetched ${response.data.length} swings for user ${userId}`);
+            console.log(`✅ Fetched ${response.data.length} swings`);
             return response.data;
         } catch (error) {
             console.error('❌ Failed to fetch swings:', error.response?.data || error.message);

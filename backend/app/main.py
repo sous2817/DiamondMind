@@ -261,19 +261,19 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
     
     return {"id": user.id, "email": user.email, "username": user.username, "created_at": str(user.created_at)}
 
-@app.get("/api/users/{user_id}/swings")
-async def get_user_swings(user_id: int, db: Session = Depends(get_db)):
-    """Get all completed swings for a user"""
+@app.get("/api/swings")
+async def get_my_swings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all completed swings for the authenticated user"""
     try:
         # Try to filter by status (if column exists)
         swings = db.query(Swing).filter(
-            Swing.user_id == user_id,
+            Swing.user_id == current_user.id,
             Swing.status == SwingStatus.COMPLETED
         ).all()
     except Exception as e:
         # Fallback if status column doesn't exist yet (migration pending)
         logger.warning(f"Status filter failed, returning all swings: {str(e)}")
-        swings = db.query(Swing).filter(Swing.user_id == user_id).all()
+        swings = db.query(Swing).filter(Swing.user_id == current_user.id).all()
     
     return [
         {
@@ -283,6 +283,33 @@ async def get_user_swings(user_id: int, db: Session = Depends(get_db)):
             "notes": getattr(swing, 'notes', None),  # DM-57: User notes
             "video_url": swing.video_url,
             "status": swing.status.value if hasattr(swing, 'status') and swing.status else 'completed',  # DM-56: Status tracking
+            "created_at": str(swing.created_at),
+            "has_analysis": swing.analysis is not None
+        }
+        for swing in swings
+    ]
+
+# Legacy endpoint for backward compatibility
+@app.get("/api/users/{user_id}/swings")
+async def get_user_swings_legacy(user_id: int, db: Session = Depends(get_db)):
+    """Get all completed swings for a user (legacy endpoint - use GET /api/swings instead)"""
+    try:
+        swings = db.query(Swing).filter(
+            Swing.user_id == user_id,
+            Swing.status == SwingStatus.COMPLETED
+        ).all()
+    except Exception as e:
+        logger.warning(f"Status filter failed, returning all swings: {str(e)}")
+        swings = db.query(Swing).filter(Swing.user_id == user_id).all()
+    
+    return [
+        {
+            "id": swing.id,
+            "filename": swing.filename,
+            "title": getattr(swing, 'title', None),
+            "notes": getattr(swing, 'notes', None),
+            "video_url": swing.video_url,
+            "status": swing.status.value if hasattr(swing, 'status') and swing.status else 'completed',
             "created_at": str(swing.created_at),
             "has_analysis": swing.analysis is not None
         }

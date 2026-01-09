@@ -39,7 +39,7 @@ export default function ProfileScreen({ navigation }) {
 
         try {
             setLoading(true);
-            const userSwings = await SwingService.getUserSwings(user.id);
+            const userSwings = await SwingService.getUserSwings();
             setSwings(userSwings);
         } catch (error) {
             console.error('Failed to load swings:', error);
