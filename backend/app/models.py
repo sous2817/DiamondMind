@@ -4,6 +4,22 @@ from datetime import datetime
 import enum
 from .database import Base
 
+class AgeGroup(str, enum.Enum):
+    """Age group categories for personalized coaching"""
+    TEN_U = "10u"
+    TWELVE_U = "12u"
+    FOURTEEN_U = "14u"
+    SIXTEEN_U = "16u"
+    EIGHTEEN_U = "18u"
+    COLLEGE = "college"
+    ADULT = "adult"
+
+class Handedness(str, enum.Enum):
+    """Batting handedness"""
+    LEFT = "left"
+    RIGHT = "right"
+    SWITCH = "switch"
+
 class SwingStatus(str, enum.Enum):
     """Status of swing upload and processing"""
     PENDING = "pending"
@@ -16,8 +32,15 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    supabase_id = Column(String(255), unique=True, nullable=True, index=True)  # UUID from Supabase Auth
     email = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(100), unique=True, nullable=False)
+    
+    # Profile fields (DM-15)
+    age_group = Column(Enum(AgeGroup), nullable=True, default=AgeGroup.ADULT)
+    handedness = Column(Enum(Handedness), nullable=True)
+    height_cm = Column(Integer, nullable=True)  # Height in centimeters
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

@@ -15,13 +15,14 @@ const THEME = {
 
 export default function SignupScreen({ navigation }) {
     const [email, setEmail] = useState('');
-    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { signup } = useContext(UserContext);
 
     const handleSignup = async () => {
-        if (!email.trim() || !username.trim()) {
+        if (!email.trim() || !password || !confirmPassword) {
             setError('Please fill in all fields');
             return;
         }
@@ -31,19 +32,25 @@ export default function SignupScreen({ navigation }) {
             return;
         }
 
+        if (password.length < 6) {
+            setError('Password must be at least 6 characters');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
         setLoading(true);
         setError('');
 
         try {
-            await signup(email.trim().toLowerCase(), username.trim());
+            await signup(email.trim().toLowerCase(), password);
             // Navigation handled by App.js conditional rendering
         } catch (err) {
             console.error('Signup error:', err);
-            if (err.response?.status === 400) {
-                setError('Email or username already exists');
-            } else {
-                setError('Unable to connect. Please try again.');
-            }
+            setError(err.message || 'Unable to create account. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -79,10 +86,22 @@ export default function SignupScreen({ navigation }) {
 
                     <TextInput
                         style={styles.input}
-                        placeholder="Username"
+                        placeholder="Password (min 6 characters)"
                         placeholderTextColor={THEME.subtext}
-                        value={username}
-                        onChangeText={setUsername}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        editable={!loading}
+                    />
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Confirm Password"
+                        placeholderTextColor={THEME.subtext}
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        secureTextEntry
                         autoCapitalize="none"
                         editable={!loading}
                     />

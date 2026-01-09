@@ -18,8 +18,9 @@ from fastapi import BackgroundTasks
 
 # Database imports
 from app.database import engine, Base, get_db
-from app.models import User, Swing, AnalysisResult, SwingStatus
+from app.models import User, Swing, AnalysisResult, SwingStatus, AgeGroup, Handedness
 from app.cleanup import cleanup_orphaned_swings
+from app.auth_middleware import get_current_user, get_optional_user
 
 # Scheduler for cleanup jobs
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -77,11 +78,22 @@ async def startup():
         from alembic.config import Config
         from alembic import command
         import os
+        from pathlib import Path
         
         # Only run migrations if DATABASE_URL is set (production)
         if os.getenv("DATABASE_URL"):
             logger.info("📊 Running database migrations...")
-            alembic_cfg = Config("alembic.ini")
+            
+            # Get the directory where this file is located
+            current_dir = Path(__file__).parent.parent
+            alembic_ini_path = current_dir / "alembic.ini"
+            
+            logger.info(f"📁 Using alembic.ini from: {alembic_ini_path}")
+            
+            alembic_cfg = Config(str(alembic_ini_path))
+            # Set the script location relative to alembic.ini
+            alembic_cfg.set_main_option("script_location", str(current_dir / "alembic"))
+            
             command.upgrade(alembic_cfg, "head")
             logger.info("✅ Database migrations complete")
         else:
@@ -90,6 +102,7 @@ async def startup():
             logger.info("✅ Database tables created/verified (local SQLite)")
     except Exception as e:
         logger.error(f"⚠️ Migration failed: {str(e)}")
+        logger.exception("Full migration error:")
         # Fall back to creating tables directly
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created/verified (fallback)")
@@ -175,39 +188,74 @@ async def debug_db_status(db: Session = Depends(get_db)):
             "error": str(e)
         }
 
-# ========== DATABASE CRUD ENDPOINTS ==========
+# ========== AUTHENTICATION & PROFILE ENDPOINTS (DM-15) ==========
 
-@app.post("/api/users", response_model=dict)
-async def create_user(email: str, username: str, db: Session = Depends(get_db)):
-    """Create a new user"""
-    # Check if user already exists
-    existing_user = db.query(User).filter(
-        (User.email == email) | (User.username == username)
-    ).first()
+@app.get("/api/profile")
+async def get_profile(current_user: User = Depends(get_current_user)):
+    """Get current user's profile (requires authentication)"""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "age_group": current_user.age_group.value if current_user.age_group else None,
+        "handedness": current_user.handedness.value if current_user.handedness else None,
+        "height_cm": current_user.height_cm,
+        "created_at": str(current_user.created_at),
+        "updated_at": str(current_user.updated_at)
+    }
+
+@app.patch("/api/profile")
+async def update_profile(
+    age_group: str = None,
+    handedness: str = None,
+    height_cm: int = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update current user's profile fields"""
+    updated = False
     
-    if existing_user:
-        raise HTTPException(status_code=400, detail="User with this email or username already exists")
+    if age_group is not None:
+        try:
+            current_user.age_group = AgeGroup(age_group)
+            updated = True
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid age_group: {age_group}")
     
-    user = User(email=email, username=username)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    if handedness is not None:
+        try:
+            current_user.handedness = Handedness(handedness)
+            updated = True
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid handedness: {handedness}")
     
-    return {"id": user.id, "email": user.email, "username": user.username, "created_at": str(user.created_at)}
+    if height_cm is not None:
+        if height_cm < 50 or height_cm > 300:
+            raise HTTPException(status_code=400, detail="Height must be between 50-300 cm")
+        current_user.height_cm = height_cm
+        updated = True
+    
+    if updated:
+        db.commit()
+        db.refresh(current_user)
+        logger.info(f"Profile updated for user {current_user.id}: age_group={current_user.age_group}, handedness={current_user.handedness}, height={current_user.height_cm}")
+    
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "age_group": current_user.age_group.value if current_user.age_group else None,
+        "handedness": current_user.handedness.value if current_user.handedness else None,
+        "height_cm": current_user.height_cm,
+        "updated": updated
+    }
+
+# ========== LEGACY ENDPOINTS (For backward compatibility) ==========
 
 @app.get("/api/users/{user_id}")
 async def get_user(user_id: int, db: Session = Depends(get_db)):
-    """Get user by ID"""
+    """Get user by ID (legacy endpoint)"""
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {"id": user.id, "email": user.email, "username": user.username, "created_at": str(user.created_at)}
-
-@app.get("/api/auth/login")
-async def login(email: str, db: Session = Depends(get_db)):
-    """Simple email-based login (no password)"""
-    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -453,7 +501,11 @@ async def process_video_background(file_data: bytes, filename: str, content_type
             print(f"Background: 🧹 Cleaned up {temp_path}")
 
 @app.post("/api/videos/upload")
-async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None, user_id: int = None):
+async def upload_and_analyze(
+    file: UploadFile = File(...),
+    job_id: str = None,
+    current_user: User = Depends(get_optional_user)
+):
     """
     ⚡️ ASYNC UPLOAD PATTERN:
     1. Read file into memory immediately (non-blocking)
@@ -461,15 +513,18 @@ async def upload_and_analyze(file: UploadFile = File(...), job_id: str = None, u
     3. Save & Process file in background task
     4. Push results via WebSocket
     
-    Optional: Provide user_id to save results to database
+    DM-15: Now requires authentication. User ID is extracted from JWT token.
     """
     allowed_extensions = ["mp4", "mov", "avi"]
     ext = file.filename.split(".")[-1].lower()
     if ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
+    # Extract user_id from authenticated user (if available)
+    user_id = current_user.id if current_user else None
+    
     try:
-        print(f"Backend: 📥 Received upload request for Job {job_id} (User: {user_id or 'anonymous'})")
+        logger.info(f"Backend: 📥 Received upload request for Job {job_id} (User: {user_id or 'anonymous'})")
         
         # ⚡️ KEY FIX: Read file into memory WITHOUT blocking the response
         # This is fast enough (<5s) to avoid timeout, then we return immediately

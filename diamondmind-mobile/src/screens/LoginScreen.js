@@ -15,6 +15,7 @@ const THEME = {
 
 export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { login } = useContext(UserContext);
@@ -25,19 +26,20 @@ export default function LoginScreen({ navigation }) {
             return;
         }
 
+        if (!password) {
+            setError('Please enter your password');
+            return;
+        }
+
         setLoading(true);
         setError('');
 
         try {
-            await login(email.trim().toLowerCase());
+            await login(email.trim().toLowerCase(), password);
             // Navigation handled by App.js conditional rendering
         } catch (err) {
             console.error('Login error:', err);
-            if (err.response?.status === 404) {
-                setError('No account found with this email');
-            } else {
-                setError('Unable to connect. Please try again.');
-            }
+            setError(err.message || 'Invalid email or password');
         } finally {
             setLoading(false);
         }
@@ -68,6 +70,17 @@ export default function LoginScreen({ navigation }) {
                         onChangeText={setEmail}
                         autoCapitalize="none"
                         keyboardType="email-address"
+                        editable={!loading}
+                    />
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Password"
+                        placeholderTextColor={THEME.subtext}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        autoCapitalize="none"
                         editable={!loading}
                     />
 

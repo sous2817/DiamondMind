@@ -9,4 +9,8 @@ export const Config = {
 
     // WebSocket URL (e.g., wss://diamondmind-backend-yalf.onrender.com)
     WS_BASE_URL: `wss://${LIVE_BACKEND_URL}`,
+
+    // Supabase Configuration (DM-15)
+    SUPABASE_URL: "https://zgwxrfetbplatwpimmec.supabase.co",
+    SUPABASE_ANON_KEY: "sb_publishable_vjX51zfiL7Z_lHjkoEU4gw_lhRQWclw",
 };
