@@ -1,0 +1,564 @@
+{
+  "stories": [
+    {
+      "key": "DM-62",
+      "summary": "Implement Native Video Compression (Post-Expo Go)",
+      "status": "Idea",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want my videos compressed before upload so that uploads are faster and don't crash the AI service.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nDM-29 added video compression infrastructure, but actual compression is disabled in Expo Go due to native module limitations.\n\nCurrent State:\n- VideoCompressionService exists with proper API\n- UI for compression progress implemented\n- Service currently skips compression and returns original file\n- Works in Expo Go for development\n\nTarget State:\n- Compress videos to 720p @ 2.5 Mbps before upload\n- Reduce file sizes from 50-100MB to 10-20MB\n- Prevent AI service crashes (512MB RAM limit)\n- Improve upload speed and data usage\n\nThis is a duplicate of DM-58, created earlier.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Replace stub compression in VideoCompressionService with real FFmpeg or native compression\n* Compress videos to 720p (1280px width) with 2.5 Mbps bitrate\n* Skip compression for files already < 10MB\n* Show accurate progress during compression (0-100%)\n* Handle compression failures gracefully (fallback to original)\n* Test on iOS and Android physical devices\n* Verify compressed videos upload successfully\n* Verify AI service processes compressed videos without crashes\n* Measure compression time (target: < 10s for 30s video)\n* Measure file size reduction (target: 70-80% reduction)\n\nh3. \u2699\ufe0f Technical Implementation Details\n* See DM-58 for full implementation details\n* \n* This ticket is a duplicate - close in favor of DM-58\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n\n",
+      "labels": [
+        "Mobile",
+        "Native",
+        "Performance"
+      ]
+    },
+    {
+      "key": "DM-61",
+      "summary": "Serve Videos via HTTP Endpoint",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Developer, I want videos to be accessible via HTTP URLs so that the mobile app can stream them directly.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrently, video_url in the database stores local file paths like `/backend/uploads/video.mp4`. These cannot be opened by the mobile app using Linking.openURL() or streamed in a video player.\n\nWe need to either:\n1. Serve videos via a FastAPI static file endpoint\n2. Upload videos to cloud storage (S3, Supabase Storage) and store HTTP URLs\n\nOption 1 is simpler for MVP, Option 2 is better for production scale.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Videos accessible via HTTP URL (e.g., https://backend.com/videos/{filename})\n* Support video streaming (range requests for seeking)\n* CORS headers configured for mobile app access\n* Proper content-type headers (video/mp4)\n* Authentication/authorization for video access (optional)\n* Update video_url in database to store full HTTP URLs\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Option 1: FastAPI Static Files (Recommended for MVP)\n* ```python\n* from fastapi.staticfiles import StaticFiles\n* app.mount('/videos', StaticFiles(directory='uploads'), name='videos')\n* ```\n* \n* Option 2: Cloud Storage (Production)\n* - Use Supabase Storage or AWS S3\n* - Upload videos during /upload endpoint\n* - Store public URL in video_url column\n* \n* Implementation Steps:\n* 1. Add static file mount for /videos endpoint\n* 2. Update upload endpoint to store full URL\n* 3. Add CORS headers for video streaming\n* 4. Test range requests for video seeking\n* \n* Migration:\n* - Update existing video_url records to full URLs\n* - Script: `UPDATE swings SET video_url = CONCAT('https://backend.com', video_url)`\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Large video files - ensure streaming works (range requests)\n* Concurrent video access - check server capacity\n* Video file permissions - ensure readable by web server\n* HTTPS required for mobile apps - configure SSL\n* Video deleted but URL still in DB - return 404 gracefully\n\n",
+      "labels": [
+        "Backend",
+        "Infrastructure"
+      ]
+    },
+    {
+      "key": "DM-60",
+      "summary": "Add Full Video Player to SwingDetailScreen",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to watch my swing video with skeleton overlay from the swing detail screen so that I can review my analysis without navigating away.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrently, SwingDetailScreen only shows the video filename and server path. Users can edit title/notes and view analysis data, but cannot watch the video.\n\nThe main RecordScreen has a full video player with:\n- VideoView component with expo-video\n- Skeleton overlay synchronized with playback\n- Bat trail visualization\n- Frame-by-frame scrubbing (DM-59)\n- Fullscreen mode\n\nWe should add similar functionality to SwingDetailScreen so users can review their swings.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Add VideoView component to SwingDetailScreen\n* Display video with skeleton overlay from analysis data\n* Show bat trail if available\n* Include frame-by-frame scrubbing controls (from DM-59)\n* Support fullscreen mode\n* Video plays automatically when screen loads\n* Skeleton overlay syncs with video playback\n* Works with both local and remote video URLs\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Reuse components from RecordScreen:\n* - VideoView from expo-video\n* - SkeletonOverlay component\n* - BatTrailOverlay component\n* - Scrubbing controls (slider + step buttons)\n* \n* Implementation:\n* - Import useVideoPlayer hook\n* - Parse skeletal_data JSON from analysis\n* - Set up timeUpdate listener for frame sync\n* - Add video player above title/notes section\n* - Handle video_url (may need to construct full URL)\n* \n* Video URL Handling:\n* - Check if video_url is relative path\n* - If relative, construct full URL: `${Config.API_BASE_URL}${video_url}`\n* - If already HTTP/HTTPS, use as-is\n* \n* Files to Modify:\n* - SwingDetailScreen.js - Add video player and controls\n* - May need to update backend to serve videos via HTTP\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Video URL is local file path - construct full HTTP URL\n* Video file deleted from server - show error message\n* Large video file - show loading indicator\n* No skeletal data - show video without overlay\n* Video fails to load - show error with retry button\n* Screen orientation changes - maintain playback position\n\n",
+      "labels": [
+        "Frontend",
+        "Mobile",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-59",
+      "summary": "Frame-by-Frame Video Scrubbing",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to scrub through my swing video frame-by-frame so that I can analyze specific moments in detail.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrently, users can only play/pause the video. For detailed analysis, they need the ability to:\n- Scrub through the video using a slider\n- Step forward/backward one frame at a time\n- See the skeleton overlay update in sync with the current frame\n\nThis feature enables coaches and players to examine critical moments like contact point, follow-through, and specific mechanical flaws.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Add a slider component below the video player\n* Slider syncs with current video playback position\n* Dragging slider updates video position and skeleton overlay\n* Add step forward button (advance 1 frame)\n* Add step backward button (go back 1 frame)\n* Skeleton overlay updates to match current frame\n* Display current frame number and timestamp\n* Works in both normal and fullscreen modes\n* Smooth scrubbing performance (no lag)\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Use expo-video player API for frame-level control\n* Calculate frame index from current playback time\n* Update skeleton overlay based on frame index\n* Add Slider component from React Native\n* Add step buttons with ChevronLeft/ChevronRight icons\n* \n* Implementation:\n* - Get current playback time from player.currentTime\n* - Calculate frame index: Math.floor(currentTime * fps)\n* - Seek to specific frame: player.currentTime = frameIndex / fps\n* - Update skeleton overlay when frame changes\n* \n* UI Layout:\n* - Slider below video (full width)\n* - Step buttons on either side of slider\n* - Frame counter display (e.g., 'Frame 45 / 900')\n* - Timestamp display (e.g., '1.5s / 30.0s')\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Video not loaded - disable scrubbing controls\n* No analysis data - show video only, no skeleton\n* Scrubbing while video is playing - pause first\n* Rapid scrubbing - debounce skeleton updates\n* Frame boundaries - clamp to valid range [0, totalFrames-1]\n* Different frame rates - calculate correctly for 30fps, 60fps, etc.\n\n",
+      "labels": [
+        "Frontend",
+        "Mobile",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-58",
+      "summary": "Implement Native Video Compression for Production Builds",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Developer, I want to implement real video compression in native builds (post-Expo Go) so that users benefit from reduced upload sizes and faster processing times.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nDM-29 added video compression infrastructure, but the actual compression is disabled in Expo Go due to native module limitations. When we build with EAS (DM-18), we need to implement real compression using FFmpeg or native compression libraries.\n\nCurrent State:\n- VideoCompressionService exists with proper API\n- UI for compression progress is implemented\n- Service currently skips compression and returns original file\n- Works in Expo Go for development\n\nTarget State:\n- Compress videos to 720p @ 2.5 Mbps before upload\n- Reduce file sizes from 50-100MB to 10-20MB\n- Prevent AI service crashes (512MB RAM limit)\n- Improve upload speed and data usage\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Replace stub compression in VideoCompressionService with real FFmpeg or native compression\n* Compress videos to 720p (1280px width) with 2.5 Mbps bitrate\n* Skip compression for files already < 10MB\n* Show accurate progress during compression (0-100%)\n* Handle compression failures gracefully (fallback to original)\n* Test on iOS and Android physical devices\n* Verify compressed videos upload successfully\n* Verify AI service processes compressed videos without crashes\n* Measure compression time (target: < 10s for 30s video)\n* Measure file size reduction (target: 70-80% reduction)\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Library Options:\n* - expo-av with FFmpeg (recommended for Expo)\n* - react-native-compressor (requires custom dev client)\n* - FFmpegKit for React Native\n* - Native iOS AVAssetExportSession / Android MediaCodec\n* \n* Implementation:\n* - Update VideoCompressionService.compressVideo() method\n* - Add FFmpeg compression with 720p preset\n* - Maintain existing progress callback API\n* - Keep error handling and fallback logic\n* - Test compression quality vs file size trade-offs\n* \n* Configuration:\n* - Resolution: 1280x720 (720p)\n* - Bitrate: 2.5 Mbps\n* - Codec: H.264\n* - Audio: AAC, 128 kbps\n* \n* Files to Modify:\n* - diamondmind-mobile/src/services/VideoCompressionService.js\n* - diamondmind-mobile/package.json (add compression library)\n* - app.json (if using custom native modules)\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Very short videos (< 1 second) - ensure compressor handles gracefully\n* Already compressed videos (< 10MB) - skip compression\n* Low device storage - check available space before compression\n* Compression failure - fallback to original file\n* App backgrounding during compression - resume when app returns\n* Very large files (> 100MB) - may need chunked processing or size limit\n* Different aspect ratios - maintain aspect ratio during compression\n* Portrait vs landscape videos - handle both orientations\n\n",
+      "labels": [
+        "Mobile",
+        "Native",
+        "Performance"
+      ]
+    },
+    {
+      "key": "DM-57",
+      "summary": "Swing History Enhancements: View, Edit, and Delete",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a user, I want to view, edit, and delete my swing history so that I can manage my swing library effectively and add context to help me remember each swing.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrently, users can see a list of their swings in the Profile screen, but:\n- Tapping a swing only shows an alert with basic info\n- Swing filenames are random strings (e.g., 'video_1234567890.mp4')\n- Users cannot add notes or rename swings\n- Users cannot delete old swings\n- Users cannot view the full analysis with video playback from history\n\nThis makes it difficult to organize and find specific swings.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* User can tap a swing in history to view full analysis with video playback\n* User can add/edit a custom title or notes for each swing\n* User can delete a swing from their history\n* Swing list shows custom title (if set) instead of filename\n* Video playback from history shows skeletal overlay and bat trail\n* Delete action requires confirmation to prevent accidental deletion\n* Editing swing details updates the database\n* UI provides visual feedback during loading/saving\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Database Schema Changes:\n* - Add 'title' VARCHAR(255) column to swings table (nullable)\n* - Add 'notes' TEXT column to swings table (nullable)\n* - Create migration script for new columns\n* \n* Backend Changes (main.py):\n* - Add PATCH /api/swings/{swing_id} endpoint to update title/notes\n* - Add DELETE /api/swings/{swing_id} endpoint to delete swing\n* - Update GET /api/users/{user_id}/swings to include title/notes\n* - Ensure DELETE cascades to analysis_results (already configured)\n* \n* Mobile App Changes:\n* 1. View Swing Analysis:\n*    - Create SwingDetailScreen.js to display analysis\n*    - Load video from swing.video_url\n*    - Display skeletal overlay and bat trail\n*    - Show attack angle and other metrics\n*    - Add 'Edit' and 'Delete' buttons\n* \n* 2. Edit Swing Details:\n*    - Add modal/screen to edit title and notes\n*    - Call PATCH /api/swings/{swing_id} to save changes\n*    - Update local state after successful save\n*    - Show loading indicator during save\n* \n* 3. Delete Swing:\n*    - Show confirmation alert before deleting\n*    - Call DELETE /api/swings/{swing_id}\n*    - Remove from local state after successful delete\n*    - Show success message\n* \n* 4. Profile Screen Updates:\n*    - Display swing.title if set, otherwise swing.filename\n*    - Add subtitle showing notes preview (first 50 chars)\n*    - Navigate to SwingDetailScreen on tap\n* \n* Navigation:\n* - Add SwingDetailScreen to navigation stack\n* - Pass swing data and analysis as route params\n* - Support back navigation to Profile screen\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* User deletes swing while viewing it: Navigate back to Profile after delete\n* Network error during save: Show error message, keep local changes\n* Network error during delete: Show error message, don't remove from list\n* Video URL is invalid/expired: Show error message with option to re-upload\n* Analysis data is missing: Show message 'Analysis not available'\n* User edits title to empty string: Use filename as fallback\n* Very long title/notes: Truncate in list view, show full in detail view\n* Concurrent edits from multiple devices: Last write wins (acceptable for MVP)\n* User navigates away while video is loading: Cancel video load\n\n",
+      "labels": [
+        "Backend",
+        "Enhancement",
+        "Mobile",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-56",
+      "summary": "Add Upload Cleanup for Aborted/Failed Swing Analysis",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a developer, I want proper cleanup of database records when users abort uploads or when AI processing fails, so that we don't accumulate orphaned data in the database.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrently, when a user uploads a swing video, the backend creates a Swing record in the database and starts AI processing. If the user cancels the upload or if processing fails, the database records may remain orphaned with no analysis results or incomplete data. This can lead to database bloat and confusion when viewing swing history.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Add 'status' field to Swing model (pending, processing, completed, failed)\n* Update backend to set status='processing' when upload starts\n* Update backend to set status='completed' when analysis finishes successfully\n* Update backend to set status='failed' if AI processing errors\n* Add cleanup endpoint or scheduled job to remove old 'pending' or 'failed' swings\n* Mobile app calls cleanup endpoint when user cancels upload (optional)\n* Swing history only shows swings with status='completed'\n* Add database migration for new status field\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Database Schema Changes:\n* - Add 'status' ENUM column to swings table: ('pending', 'processing', 'completed', 'failed')\n* - Add 'error_message' TEXT column to swings table (nullable)\n* - Add index on status for efficient queries\n* \n* Backend Changes (main.py):\n* - Update POST /api/videos/upload to set status='processing' when creating Swing\n* - Update background processor to set status='completed' on success\n* - Update background processor to set status='failed' and store error_message on failure\n* - Add GET /api/users/{user_id}/swings to filter by status='completed'\n* \n* Cleanup Options:\n* Option 1: Scheduled Job (Recommended)\n* - Add background task that runs every hour\n* - Delete swings where status='pending' or 'processing' and created_at > 24 hours ago\n* - Delete swings where status='failed' and created_at > 7 days ago\n* \n* Option 2: Manual Cleanup Endpoint\n* - Add DELETE /api/swings/{swing_id} endpoint\n* - Mobile app calls this when user cancels upload\n* - Requires tracking swing_id before analysis completes\n* \n* Option 3: Transaction-Based (Most Robust)\n* - Wrap entire upload + AI processing in a database transaction\n* - Only commit when analysis completes successfully\n* - Rollback on error or timeout\n* - Requires connection pooling adjustments\n* \n* Migration Script:\n* - Alembic migration to add status and error_message columns\n* - Set existing swings to status='completed' (assume they're valid)\n* - Add NOT NULL constraint after backfilling\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* User cancels upload mid-processing: Backend continues, marks as completed or failed based on AI result\n* AI service crashes during processing: Swing remains in 'processing' state, cleanup job removes after 24 hours\n* Network timeout between backend and AI service: Backend should catch timeout and set status='failed'\n* User uploads same video twice: Both swings are created, both complete successfully (no deduplication needed)\n* Cleanup job runs while processing: Only remove swings older than threshold (e.g., 24 hours)\n* Database migration on production: Existing swings without status should default to 'completed'\n* Concurrent cleanup and status update: Use database locks or WHERE status='pending' in DELETE query\n\n",
+      "labels": [
+        "Backend",
+        "Database",
+        "Enhancement"
+      ]
+    },
+    {
+      "key": "DM-55",
+      "summary": "Add User Authentication and Profile Management to Mobile App",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a user, I want to create an account and log in to the DiamondMind app so that my swing analysis history is saved and accessible across sessions and devices.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nDM-10 implemented the backend database with users, swings, and analysis_results tables. The mobile app currently operates anonymously without user accounts. We need to add authentication UI (login/signup screens), persist user sessions, and associate all swing uploads with the logged-in user. This enables features like viewing swing history, tracking progress over time, and multi-device access.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* User can create a new account with email and username\n* User can log in with existing credentials\n* User session persists across app restarts (AsyncStorage)\n* User can log out\n* All swing uploads are automatically associated with logged-in user (user_id sent to backend)\n* User can view their swing history (list of past swings)\n* User can tap a swing to view its analysis results\n* App shows 'Sign Up / Log In' screen on first launch\n* App shows main upload screen after successful login\n* Graceful error handling for network failures and invalid credentials\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Mobile App - New Screens:\n* - LoginScreen.js: Email/username input, login button, 'Create Account' link\n* - SignupScreen.js: Email, username inputs, signup button, 'Already have account?' link\n* - ProfileScreen.js: Display username, email, logout button, swing history list\n* - SwingHistoryScreen.js: List of user's swings with thumbnails and dates\n* - SwingDetailScreen.js: Display full analysis for a selected swing\n* \n* Mobile App - Navigation:\n* - Add React Navigation (if not already present)\n* - Stack Navigator: Login \u00e2\u2020\u2019 Signup \u00e2\u2020\u2019 Main App (Upload/Profile tabs)\n* - Tab Navigator: Upload tab, Profile tab\n* - Conditional rendering: Show auth screens if not logged in, main app if logged in\n* \n* Mobile App - State Management:\n* - Add user context (UserContext.js) to store current user data\n* - Store user session in AsyncStorage (key: 'user_session')\n* - Load user session on app startup\n* - Clear session on logout\n* \n* Mobile App - API Integration:\n* - Create AuthService.js:\n*   - signup(email, username) \u00e2\u2020\u2019 POST /api/users\n*   - login(email) \u00e2\u2020\u2019 GET /api/users (search by email, or add login endpoint)\n*   - getCurrentUser() \u00e2\u2020\u2019 returns user from AsyncStorage\n*   - logout() \u00e2\u2020\u2019 clears AsyncStorage\n* - Update UploadService.js:\n*   - Pass user_id parameter to /api/videos/upload\n*   - Get user_id from UserContext\n* - Create SwingService.js:\n*   - getUserSwings(user_id) \u00e2\u2020\u2019 GET /api/users/{user_id}/swings\n*   - getSwingAnalysis(swing_id) \u00e2\u2020\u2019 GET /api/swings/{swing_id}/analysis\n* \n* Backend Changes (if needed):\n* - Add GET /api/users?email={email} endpoint for login (search by email)\n* - Or add POST /api/auth/login endpoint with email validation\n* - Ensure /api/videos/upload accepts user_id parameter (already implemented)\n* \n* UI/UX Design:\n* - Clean, minimal login/signup forms\n* - Use existing app color scheme (gold accents, dark theme)\n* - Show loading spinner during API calls\n* - Display friendly error messages (e.g., 'Email already exists', 'User not found')\n* - Swing history: Card-based list with video thumbnail, date, score (if available)\n* - Pull-to-refresh on swing history\n* \n* Data Flow:\n* 1. User signs up \u00e2\u2020\u2019 POST /api/users \u00e2\u2020\u2019 Store user in AsyncStorage \u00e2\u2020\u2019 Navigate to main app\n* 2. User logs in \u00e2\u2020\u2019 GET /api/users?email={email} \u00e2\u2020\u2019 Store user in AsyncStorage \u00e2\u2020\u2019 Navigate to main app\n* 3. User uploads swing \u00e2\u2020\u2019 Include user_id in upload request \u00e2\u2020\u2019 Backend saves to database\n* 4. User views history \u00e2\u2020\u2019 GET /api/users/{user_id}/swings \u00e2\u2020\u2019 Display list\n* 5. User taps swing \u00e2\u2020\u2019 GET /api/swings/{swing_id}/analysis \u00e2\u2020\u2019 Display analysis with skeleton overlay\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Duplicate Email/Username: Backend returns 400 error, show 'Email already exists' message\n* Invalid Login: User not found, show 'No account found with this email' message\n* Network Failure During Signup/Login: Show 'Unable to connect' message, allow retry\n* Session Expiry: Currently no session expiry (future: add JWT tokens with expiration)\n* Offline Mode: User can view cached swing history but cannot upload or fetch new data\n* Empty Swing History: Show empty state with 'Upload your first swing!' message\n* Logout During Upload: Cancel upload, clear session, return to login screen\n* Backend Cold Start: Show loading spinner, handle timeout gracefully\n* User Deletes Account: Future feature - need DELETE /api/users/{user_id} endpoint\n* Password Reset: Future feature - currently no password (email-based login only)\n\n",
+      "labels": [
+        "Authentication",
+        "Mobile",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-53",
+      "summary": "Create Annotated Dataset for YOLO Bat Detection Model",
+      "status": "Idea",
+      "priority": "Low",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Machine Learning Engineer, I want to create a high-quality annotated dataset of baseball bats in swing videos, so that I can train a YOLO object detection model to accurately track bats across various conditions and bat types.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe current color-based HSV tracking (DM-33) works as a proof-of-concept but has limitations with wood bats, varying lighting, and background noise. To achieve production-grade bat tracking, we need to train a custom YOLO model using a properly annotated dataset of baseball swing videos. This ticket outlines the complete strategy for dataset creation, annotation, and quality assurance.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Minimum 500 annotated images (recommended 1000+) of baseball bats in various swing positions\n* Dataset includes diversity: aluminum bats (black, red, blue, silver), wood bats, different lighting conditions, indoor/outdoor\n* Bounding box annotations in YOLO format (class x_center y_center width height, normalized 0-1)\n* Dataset split: 70% training, 20% validation, 10% testing\n* Annotation quality validated (no missing bats, accurate bounding boxes, consistent labeling)\n* Dataset organized in standard YOLO directory structure with data.yaml configuration\n* Documentation of annotation guidelines and dataset statistics\n\nh3. \u2699\ufe0f Technical Implementation Details\n* **Phase 1: Video Collection & Frame Extraction**\n* - Collect 20-30 baseball swing videos (10-60 seconds each)\n* - Sources: YouTube (creative commons), personal recordings, stock footage\n* - Extract frames at 5 FPS (every 6th frame from 30fps video) to get ~1000-1500 candidate frames\n* - Use FFmpeg: `ffmpeg -i swing.mp4 -vf fps=5 frames/frame_%04d.jpg`\n* \n* **Phase 2: Frame Selection & Curation**\n* - Review extracted frames and select 500-1000 frames with clear bat visibility\n* - Prioritize frames showing:\n*   - Different swing phases (setup, load, swing, follow-through)\n*   - Various bat angles and positions\n*   - Challenging scenarios (motion blur, partial occlusion, background clutter)\n* - Exclude frames where bat is completely hidden or out of frame\n* \n* **Phase 3: Annotation Strategy**\n* - Use annotation tool: Roboflow (recommended), LabelImg, or CVAT\n* - Create single class: 'bat'\n* - Bounding box guidelines:\n*   - Box should tightly fit the entire visible bat (from knob to barrel)\n*   - Include the bat even if partially occluded by hands\n*   - For motion blur, box the blurred region\n*   - Minimum box size: 20x20 pixels (avoid tiny/unclear bats)\n* - Annotation consistency:\n*   - Same annotator for entire dataset (or max 2-3 with clear guidelines)\n*   - Review and correct annotations in batches of 100\n* \n* **Phase 4: Dataset Organization (YOLO Format)**\n* - Directory structure:\n*   ```\n*   dataset/\n*     train/\n*       images/\n*       labels/\n*     val/\n*       images/\n*       labels/\n*     test/\n*       images/\n*       labels/\n*     data.yaml\n*   ```\n* - Label format (one .txt per image):\n*   ```\n*   0 0.512 0.384 0.156 0.423\n*   # class x_center y_center width height (normalized 0-1)\n*   ```\n* - data.yaml configuration:\n*   ```yaml\n*   train: ../train/images\n*   val: ../val/images\n*   test: ../test/images\n*   nc: 1  # number of classes\n*   names: ['bat']\n*   ```\n* \n* **Phase 5: Quality Assurance**\n* - Automated validation:\n*   - Check all images have corresponding label files\n*   - Verify bounding box coordinates are within [0, 1] range\n*   - Ensure no empty label files (frames with no bat should be excluded)\n* - Manual review:\n*   - Sample 10% of annotations for spot-checking\n*   - Visualize bounding boxes on images to verify accuracy\n*   - Check for consistent box sizing across similar frames\n* \n* **Phase 6: Dataset Augmentation (Optional)**\n* - Use Roboflow or Albumentations for augmentation:\n*   - Horizontal flip (50% probability)\n*   - Brightness adjustment (\u00c2\u00b115%)\n*   - Slight rotation (\u00c2\u00b15 degrees)\n*   - Mosaic augmentation (YOLO-specific)\n* - Augmentation can 2-3x effective dataset size\n* \n* **Recommended Tools:**\n* - **Roboflow** (easiest, has YOLO export, augmentation, and hosting)\n* - **LabelImg** (free, desktop app, simple bounding boxes)\n* - **CVAT** (advanced, supports collaboration, self-hosted or cloud)\n* - **FFmpeg** (video frame extraction)\n* - **Python script** (automated dataset splitting and validation)\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* **Motion Blur**: Annotate the blurred region as best estimate of bat position. YOLO can learn to handle blur if trained on it.\n* **Partial Occlusion**: If >50% of bat is visible, annotate it. If <50%, consider excluding the frame.\n* **Multiple Bats in Frame**: Unlikely in swing videos, but annotate all visible bats if present.\n* **Bat vs Background Confusion**: Include challenging frames (bat against fence, similar-colored backgrounds) to improve model robustness.\n* **Different Camera Angles**: Collect videos from multiple angles (side view, front view, angled) for better generalization.\n* **Lighting Variations**: Include indoor (artificial light), outdoor (daylight), and low-light scenarios.\n* **Bat Types**: Ensure dataset has ~60% aluminum, ~30% wood, ~10% composite/hybrid bats to match real-world distribution.\n\n",
+      "labels": [
+        "AI",
+        "Dataset",
+        "ML-Training"
+      ]
+    },
+    {
+      "key": "DM-52",
+      "summary": "Add Toggle Control for Skeleton Overlay Visibility",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "{panel:bgColor=#eae6ff}\n*User Story*\n\nAs a user, I want to toggle the skeleton overlay on and off during video playback, so I can choose whether to view the pose analysis or just the raw video.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\n\nCurrently, the skeleton overlay is always visible when analysis results are available. Users may want to compare their swing with and without the overlay, or simply prefer viewing the raw video without visual annotations.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n\n* A toggle button/switch is visible in the UI when analysis results are loaded.\n* Clicking the toggle hides/shows the skeleton overlay without affecting video playback.\n* Toggle state persists during video scrubbing and seeking.\n* Overlay visibility preference is maintained when switching between analyzed videos in the same session.\n* Toggle is disabled or hidden when no analysis results are available.\n\nh3. \u2699\ufe0f Technical Implementation Details\n\n* Add a boolean state variable (e.g., `showOverlay`) in App.js.\n* Conditionally render the SkeletonOverlay component based on this state.\n* Add a toggle button (likely near playback controls) that updates the state.\n* Ensure the toggle doesn't trigger unnecessary re-renders of the video player\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n\n* Toggle should be disabled during video upload/processing (no results yet).\n* Switching videos should reset or maintain toggle state (decide on UX preference).\n* Toggle state should not interfere with overlay synchronization logic.\n* Consider accessibility: toggle should have proper ARIA labels for screen readers.",
+      "labels": [
+        "Feature",
+        "Mobile",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-51",
+      "summary": "Fix Skeleton Overlay Jitter with React.memo and Frame-Change Detection",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a user, I want the skeleton overlay to render smoothly without jitter during video playback, so I can accurately analyze my swing mechanics.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe overlay was re-rendering 60 times per second (on every timeUpdate event) even when the frame data hadn't changed. This caused visual jitter and wasted rendering cycles. The issue was excessive state updates and missing memoization.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Overlay re-renders only when frame data actually changes (30fps for typical videos).\n* No visual jitter during continuous playback.\n* Smooth overlay tracking when seeking/scrubbing through video.\n* No performance degradation or visual artifacts.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* A\n* p\n* p\n* l\n* i\n* e\n* d\n*  \n* R\n* e\n* a\n* c\n* t\n* .\n* m\n* e\n* m\n* o\n*  \n* t\n* o\n*  \n* S\n* k\n* e\n* l\n* e\n* t\n* o\n* n\n* O\n* v\n* e\n* r\n* l\n* a\n* y\n*  \n* c\n* o\n* m\n* p\n* o\n* n\n* e\n* n\n* t\n*  \n* w\n* i\n* t\n* h\n*  \n* c\n* u\n* s\n* t\n* o\n* m\n*  \n* c\n* o\n* m\n* p\n* a\n* r\n* i\n* s\n* o\n* n\n*  \n* f\n* u\n* n\n* c\n* t\n* i\n* o\n* n\n*  \n* t\n* o\n*  \n* p\n* r\n* e\n* v\n* e\n* n\n* t\n*  \n* r\n* e\n* -\n* r\n* e\n* n\n* d\n* e\n* r\n* s\n*  \n* w\n* h\n* e\n* n\n*  \n* l\n* a\n* n\n* d\n* m\n* a\n* r\n* k\n* s\n*  \n* h\n* a\n* v\n* e\n* n\n* '\n* t\n*  \n* c\n* h\n* a\n* n\n* g\n* e\n* d\n* .\n*  \n* A\n* d\n* d\n* e\n* d\n*  \n* f\n* r\n* a\n* m\n* e\n*  \n* i\n* n\n* d\n* e\n* x\n*  \n* t\n* r\n* a\n* c\n* k\n* i\n* n\n* g\n*  \n* w\n* i\n* t\n* h\n*  \n* u\n* s\n* e\n* R\n* e\n* f\n*  \n* i\n* n\n*  \n* A\n* p\n* p\n* .\n* j\n* s\n*  \n* t\n* o\n*  \n* s\n* k\n* i\n* p\n*  \n* r\n* e\n* d\n* u\n* n\n* d\n* a\n* n\n* t\n*  \n* s\n* t\n* a\n* t\n* e\n*  \n* u\n* p\n* d\n* a\n* t\n* e\n* s\n* .\n*  \n* R\n* e\n* d\n* u\n* c\n* e\n* d\n*  \n* r\n* e\n* -\n* r\n* e\n* n\n* d\n* e\n* r\n*  \n* f\n* r\n* e\n* q\n* u\n* e\n* n\n* c\n* y\n*  \n* f\n* r\n* o\n* m\n*  \n* 6\n* 0\n* /\n* s\n* e\n* c\n*  \n* t\n* o\n*  \n* v\n* i\n* d\n* e\n* o\n*  \n* F\n* P\n* S\n*  \n* (\n* ~\n* 3\n* 0\n* /\n* s\n* e\n* c\n* )\n* .\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Container resize mid-playback should trigger re-render.\n* Frame index reset needed when switching videos.\n* Backwards seeking should correctly update overlay.\n\n",
+      "labels": [
+        "Mobile",
+        "Optimization",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-50",
+      "summary": "Refactor Mobile Uploads to Async/WebSocket Pattern",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a user, I want the app to handle long processing times without timing out so that I can see my analysis results reliably.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nRender idle timeouts (100s) kill the HTTP connection before AI finishes (105s). We need to decouple the upload from the result.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Backend accepts upload immediately with 202 Status.\n* Backend spawns BackgroundTask for AI processing.\n* Mobile App keeps spinner active while waiting for WebSocket result.\n* Final result is delivered via WebSocket `data.result` event.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* R\n* e\n* f\n* a\n* c\n* t\n* o\n* r\n* e\n* d\n*  \n* `\n* m\n* a\n* i\n* n\n* .\n* p\n* y\n* `\n*  \n* t\n* o\n*  \n* u\n* s\n* e\n*  \n* `\n* f\n* a\n* s\n* t\n* a\n* p\n* i\n* .\n* B\n* a\n* c\n* k\n* g\n* r\n* o\n* u\n* n\n* d\n* T\n* a\n* s\n* k\n* s\n* `\n*  \n* a\n* n\n* d\n*  \n* `\n* C\n* o\n* n\n* n\n* e\n* c\n* t\n* i\n* o\n* n\n* M\n* a\n* n\n* a\n* g\n* e\n* r\n* .\n* s\n* e\n* n\n* d\n* _\n* r\n* e\n* s\n* u\n* l\n* t\n* `\n* .\n*  \n* U\n* p\n* d\n* a\n* t\n* e\n* d\n*  \n* `\n* A\n* p\n* p\n* .\n* j\n* s\n* `\n*  \n* t\n* o\n*  \n* i\n* g\n* n\n* o\n* r\n* e\n*  \n* i\n* m\n* m\n* e\n* d\n* i\n* a\n* t\n* e\n*  \n* H\n* T\n* T\n* P\n*  \n* r\n* e\n* s\n* p\n* o\n* n\n* s\n* e\n*  \n* a\n* n\n* d\n*  \n* w\n* a\n* i\n* t\n*  \n* f\n* o\n* r\n*  \n* W\n* S\n* .\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* WebSocket disconnects during processing (User needs to reconnect or retry).\n* Upload fails before background task starts.\n\n",
+      "labels": [
+        "Mobile",
+        "Optimization",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-49",
+      "summary": "Optimize Skeleton Overlay Synchronization",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a user, I want the skeleton overlay to be perfectly synchronized and smooth during video playback, so that I can analyze my swing mechanics without distracting visual jitter.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe previous implementation used `Array.find()` inside the requestAnimationFrame/timeUpdate loop, which is an O(N) operation. With high frame counts, this caused significant processing overhead and 'jittery' updates where the overlay lagged behind the video.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Replace `Array.find` loop with O(1) direct index calculation in `App.js`.\n* Verify the overlay tracks smoothly with the video.\n* Ensure logic handles variable frame rates correctly using `result.fps`.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* I\n* m\n* p\n* l\n* e\n* m\n* e\n* n\n* t\n* e\n* d\n*  \n* `\n* M\n* a\n* t\n* h\n* .\n* f\n* l\n* o\n* o\n* r\n* (\n* c\n* u\n* r\n* r\n* e\n* n\n* t\n* T\n* i\n* m\n* e\n*  \n* *\n*  \n* f\n* p\n* s\n* )\n* `\n*  \n* t\n* o\n*  \n* c\n* a\n* l\n* c\n* u\n* l\n* a\n* t\n* e\n*  \n* t\n* h\n* e\n*  \n* e\n* x\n* a\n* c\n* t\n*  \n* f\n* r\n* a\n* m\n* e\n*  \n* i\n* n\n* d\n* e\n* x\n*  \n* i\n* n\n* s\n* t\n* a\n* n\n* t\n* l\n* y\n* .\n*  \n* R\n* e\n* m\n* o\n* v\n* e\n* d\n*  \n* t\n* h\n* e\n*  \n* l\n* i\n* n\n* e\n* a\n* r\n*  \n* s\n* e\n* a\n* r\n* c\n* h\n*  \n* l\n* o\n* o\n* p\n* .\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Videos with missing FPS metadata (default fallback handled elsewhere or should be checked).\n* Seeking/scrubbing should also update the overlay instantly.\n\n",
+      "labels": [
+        "Mobile",
+        "Optimization",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-48",
+      "summary": "Fix AI Service Dependency Conflicts & Python 3.12 Compatibility",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a developer, I want a clean and compatible requirements.txt for the AI Service so that I can install dependencies without version conflicts or Python compatibility errors.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe AI Service (Service 1) runs on Python 3.12. The previous configuration caused build failures due to a version mismatch in `mediapipe` (which required an older Python version) and a critical conflict between `opencv-python` and `opencv-python-headless`.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Update `requirements.txt` to use `mediapipe==0.10.14` for Python 3.12 compatibility.\n* Remove `opencv-python` (full) to resolve namespace collisions with `opencv-python-headless`.\n* Verify `pip install` completes successfully.\n* Verify the service starts and the `/health` endpoint returns a 200 OK status.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* M\n* o\n* d\n* i\n* f\n* i\n* e\n* d\n*  \n* `\n* r\n* e\n* q\n* u\n* i\n* r\n* e\n* m\n* e\n* n\n* t\n* s\n* .\n* t\n* x\n* t\n* `\n*  \n* t\n* o\n*  \n* u\n* n\n* p\n* i\n* n\n*  \n* `\n* p\n* r\n* o\n* t\n* o\n* b\n* u\n* f\n* `\n*  \n* (\n* a\n* l\n* l\n* o\n* w\n* i\n* n\n* g\n*  \n* r\n* e\n* s\n* o\n* l\n* u\n* t\n* i\n* o\n* n\n* )\n*  \n* a\n* n\n* d\n*  \n* r\n* e\n* m\n* o\n* v\n* e\n* d\n*  \n* t\n* h\n* e\n*  \n* G\n* U\n* I\n* -\n* d\n* e\n* p\n* e\n* n\n* d\n* e\n* n\n* t\n*  \n* O\n* p\n* e\n* n\n* C\n* V\n*  \n* l\n* i\n* b\n* r\n* a\n* r\n* y\n* .\n*  \n* V\n* e\n* r\n* i\n* f\n* i\n* e\n* d\n*  \n* v\n* i\n* a\n*  \n* `\n* p\n* i\n* p\n*  \n* c\n* h\n* e\n* c\n* k\n* `\n*  \n* a\n* n\n* d\n*  \n* `\n* u\n* v\n* i\n* c\n* o\n* r\n* n\n* `\n*  \n* s\n* t\n* a\n* r\n* t\n* u\n* p\n* .\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Local environments may require `pip uninstall opencv-python` to clear out residual files from the conflicting installation.\n\n",
+      "labels": [
+        "AI-Service",
+        "Maintenance",
+        "TechnicalDebt"
+      ]
+    },
+    {
+      "key": "DM-47",
+      "summary": "Develop AI Coaching Chatbot Interface",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to ask follow-up questions to an AI Coach about my analysis via a chat interface in the app.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nUsers may not understand the static analysis. A chatbot allows them to ask 'How do I fix this?' or 'What drill should I do?'.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Create a new `ChatOverlay` or screen in the Mobile App.\n* Implement a chat input that sends user text + current `job_id` context to the backend.\n* Backend maintains a short-term conversation history buffer.\n* Display streaming responses from the AI Coach.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Frontend: React Native Gifted Chat or custom UI.\n* Backend: New WebSocket endpoint or HTTP POST for chat messages.\n* The backend must inject the current swing's RAG context into the system prompt so the chatbot 'knows' what video is being discussed.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* User asks about non-baseball topics (guardrails needed).\n* Network disconnects during streaming response.\n\n",
+      "labels": [
+        "AI-Roadmap",
+        "GenAI",
+        "RAG"
+      ]
+    },
+    {
+      "key": "DM-46",
+      "summary": "Generate LLM Summaries for Swing Comparisons",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want a text summary explaining *why* my swing was matched with a specific Pro player, so I understand the similarity.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nSemantic search gives us the video, but this story provides the 'Why'. The LLM will compare the data points of the user's swing vs. the retrieved result.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Pass the user's swing metrics and the retrieved 'Pro Comp' metrics to the LLM.\n* Engineer a prompt to ask for a 'Compare and Contrast' summary (e.g., 'Both you and Judge have a high hand set, but you drift forward earlier').\n* Return this summary field in the API response.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* This extends the RAG pipeline.\n* It requires structured context injection (formatting both sets of landmarks into a token-efficient text representation for the LLM).\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Token limit errors if trying to pass raw data for every frame.\n* Need to summarize the swing into keyframes (stance, load, contact, follow-through) before sending to LLM.\n\n",
+      "labels": [
+        "AI-Roadmap",
+        "GenAI",
+        "RAG"
+      ]
+    },
+    {
+      "key": "DM-45",
+      "summary": "Implement Semantic Search for Similar Swing Retrieval",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to see 'Pro Comps' or past swings that look similar to my current swing, so that I can visually compare my form.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nUsing the Vector DB established in the previous story, we will query for 'nearest neighbors' to the user's current swing vector to find similar examples.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Create a backend endpoint `/api/swings/search` that accepts a swing ID.\n* Implement vector similarity search (Cosine Similarity) to find the top 3 closest matches.\n* Return the video URLs and IDs of the matching swings.\n* Filter results to ensure diverse comparisons (e.g., matching against a Pro dataset vs. User's history).\n\nh3. \u2699\ufe0f Technical Implementation Details\n* The search logic resides in the Backend.\n* It requests the vector for the target swing from the DB, then runs the similarity query.\n* Requires a pre-populated 'Pro Swing' dataset in the DB for effective day-one usage.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* No similar swings found (threshold too strict).\n* Finding the user's *own* duplicate uploads as the top match (need to filter out current ID).\n\n",
+      "labels": [
+        "AI-Roadmap",
+        "GenAI",
+        "RAG"
+      ]
+    },
+    {
+      "key": "DM-44",
+      "summary": "Implement RAG Pipeline for Natural Language Swing Analysis",
+      "status": "Idea",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Coach, I want the system to generate analysis in natural language based on established baseball coaching knowledge, so that the feedback feels professional and authoritative.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nInstead of just returning raw coordinates, we want the system to explain *what* is wrong using RAG. The system should retrieve relevant coaching tips based on detected flaws (e.g., 'casting', 'early extension').\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Ingest a baseline dataset of baseball coaching manuals/text into the Vector DB.\n* Create a retrieval chain in the Backend that queries the DB based on specific pose error signatures.\n* Integrate an LLM (e.g., OpenAI/Anthropic) to synthesize the retrieved context into a cohesive critique.\n* Return a string of natural language text alongside the existing JSON pose data.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Use LangChain or basic OpenAI API calls in `backend`.\n* Requires a new Env Var for LLM API Keys.\n* The 'query' to the RAG system will be constructed from the specific deviations found in the MediaPipe landmarks.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Hallucinations where the LLM invents coaching terms.\n* RAG retrieving irrelevant advice if the swing flaw is ambiguous.\n\n",
+      "labels": [
+        "AI-Roadmap",
+        "GenAI",
+        "RAG"
+      ]
+    },
+    {
+      "key": "DM-43",
+      "summary": "Integrate Vector Database for Swing Persistence",
+      "status": "Idea",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Developer, I want to store swing analysis data (pose landmarks) in a Vector Database (Pinecone or Weaviate) so that I can perform semantic searches and retrieval later.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrently, swing data is ephemeral. To enable RAG and comparison features, we need persistent storage optimized for similarity search. This serves as the foundational infrastructure for the upcoming GenAI features.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Provision a Vector Database instance (Pinecone or Weaviate) accessible by the Backend and AI Service.\n* Define a schema/index for storing flattened pose landmark arrays (33 landmarks * 4 attributes) as embeddings.\n* Update `ai-service` to upsert processed swing data to the Vector DB after successful MediaPipe extraction.\n* Ensure metadata (User ID, Video ID, Timestamp) is stored alongside the vectors.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Install python client for chosen DB in `backend` and `ai-service`.\n* Create a new service module `vector_store.py` to handle connection strings (managed via Env Vars).\n* Landmarks (x, y, z, visibility) might need normalization before vectorization.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Handling network timeouts when upserting large batches of historical swings.\n* Ensuring vector dimensions match the embedding model limits.\n\n",
+      "labels": [
+        "AI-Roadmap",
+        "GenAI",
+        "RAG"
+      ]
+    },
+    {
+      "key": "DM-42",
+      "summary": "UI/UX: Modernize Home Screen & Unify Error Handling",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want a professional, modern interface that clearly communicates status without redundant error messages, so that I feel confident using the tool.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrent UI is raw/MVP. Error messages appear in two places (top and bottom) due to overlapping logic. The styling lacks the 'Sports Tech' aesthetic.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Remove the top 'Timeout' icon and text container completely.\n* Refine the bottom error toast to look like a modern UI notification (rounded, better font).\n* Style the 'Select Swing' area as a modern Card with shadow and distinct button.\n* Update typography to use system weights (Bold Headers) for better hierarchy.\n* Ensure 'Cold Start' timeouts still trigger the bottom notification.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Modify 'App.js' (or main screen component).\n* Consolidate state variables for error handling (remove redundant state).\n* Use React Native 'StyleSheet' for shadows and rounded corners.\n* Keep existing 'UploadService.js' integration intact.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Ensure the new Error Toast floats above other UI elements (z-index).\n* Ensure the UI remains responsive on smaller screens (iPhone SE size).\n\n",
+      "labels": [
+        "Frontend",
+        "Mobile",
+        "UI/UX"
+      ]
+    },
+    {
+      "key": "DM-41",
+      "summary": "Optimization: Centralize and Parameterize API URLs",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Developer, I want to centralize API URLs in a config file (Mobile) and Environment Variables (AI Service) so that I don't have to hunt down hardcoded strings when the backend URL changes.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nWe recently experienced a regression where App.js pointed to an old backend (vg35) while UploadService pointed to the new one (yalf).\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Mobile App reads API_URL and WS_URL from a single src/config.js file.\n* AI Service reads BACKEND_URL from os.environ, with a fallback default.\n* System functions identically to before (upload, overlay, progress bar).\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Create diamondmind-mobile/src/config.js\n* Refactor UploadService.js and App.js to import from config.js\n* Update pose_engine.py to use os.environ.get('BACKEND_URL')\n\n",
+      "labels": [
+        "Configuration",
+        "Refactor"
+      ]
+    },
+    {
+      "key": "DM-40",
+      "summary": "Feature: Export and Download Video with Skeleton Overlay",
+      "status": "Idea",
+      "priority": "Lowest",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to download the analyzed video with the green skeleton overlay burned in so that I can share it with my coach or post it to social media.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe overlay is currently rendered in real-time as an SVG. Exporting requires merging the video stream with the SVG coordinate layer into a single file.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Add a 'Download Analysis' button to the results card and fullscreen view.\n* Merge VideoView content with SkeletonOverlay into a new MP4.\n* Save the resulting file to the device's Media Library or Files app.\n* Provide a native Share Sheet after successful export.\n\n",
+      "labels": [
+        "Feature",
+        "Media",
+        "Sharing"
+      ]
+    },
+    {
+      "key": "DM-39",
+      "summary": "Feature: Upload Cancellation and Abort Logic",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to cancel an upload if I select the wrong file so that I don't have to wait for a useless analysis to finish.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nVideo files can be large. This implementation uses AbortController to save bandwidth and server resources.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Add a visible 'Cancel' button during the loading state.\n* Trigger AbortController.abort() on press.\n* Ensure WebSocket is closed and UI returns to initial state.\n\n",
+      "labels": [
+        "Network",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-37",
+      "summary": "Optimization: Reduce Skeleton Latency via High-Frequency Polling",
+      "status": "Done",
+      "priority": "Highest",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Hitter, I want the skeleton to track my movement in real-time so that I can accurately analyze my mechanics without visual lag.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe default 500ms update interval for expo-av is insufficient for high-velocity sports analysis.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Set progressUpdateIntervalMillis to 16ms.\n* Verify landmark synchronization at 60fps.\n* Ensure no significant CPU overhead on older devices.\n\n",
+      "labels": [
+        "Performance",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-36",
+      "summary": "Optimization: Adjust Overlay UI for Safe Area Compliance",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Hitter, I want the UI controls to be easily reachable so that I don't accidentally trigger system gestures while trying to minimize the video.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe minimize button was positioned too low, interfering with the home indicator on iOS and Android.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Increase bottom margin for control buttons to minimum 24px.\n* Implement conditional positioning for Fullscreen vs Card view.\n* Verify tap success rate on devices with edge-to-edge displays.\n\n",
+      "labels": [
+        "Accessibility",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-35",
+      "summary": "Feature: Custom Fullscreen Analysis View",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Hitter, I want to see the skeletal analysis in fullscreen so I can study the fine details of my movements without the skeleton disappearing.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nNative fullscreen obscures the SVG overlay. This implementation uses a layout-level expansion to preserve the skeleton.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Custom 'Full Screen' button implemented in the overlay.\n* Uses conditional styling to expand the videoWrapper to fill the screen.\n* Maintains SVG-to-Video sync during resize events.\n\n",
+      "labels": [
+        "Fix",
+        "UI",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-34",
+      "summary": "Optimization: Migrate Video Engine to expo-video (fix_7)",
+      "status": "Done",
+      "priority": "Highest",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Developer, I want to use the modern expo-video engine so that I can avoid deprecation warnings while maintaining sub-millisecond skeleton sync.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nInitial migration failed due to inconsistent timeUpdate events. Implementing explicit timeUpdateEventInterval to match 60fps tracking requirements.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Remove all expo-av dependencies and imports.\n* Initialize player with timeUpdateEventInterval = 0.016.\n* Verify 'Clock Pulse' logs appear in the terminal during playback.\n* Ensure SkeletonOverlay aligns correctly in both Card and Fullscreen modes.\n\n",
+      "labels": [
+        "Refactor",
+        "Technical-Debt"
+      ]
+    },
+    {
+      "key": "DM-33",
+      "summary": "Optimization: SVG Coordinate Calibration",
+      "status": "Done",
+      "priority": "Highest",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want the skeletal overlay to align perfectly with my body in the video so that the analysis is visually accurate.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrently, the SVG overlay uses the container dimensions (videoWrapper), which includes letterboxing (black bars). We need to calculate the 'Active Video Area' and scale landmarks specifically to that area[cite: 57].\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Dynamic Scaling: Update SkeletonOverlay to accept 'naturalSize' from the video player.\n* Letterbox Handling: Calculate the X/Y offset for centered videos to prevent the 'floating' effect seen in the screenshot.\n* Resize Stability: Ensure the skeleton stays aligned when switching between portrait and landscape videos.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Use `onReadyForDisplay` from `expo-av` to get `naturalSize`.\n* Implement a mapping function: `targetX = (landmark.x * videoActualWidth) + horizontalOffset`.\n* Ensure `SkeletonOverlay` styles use `pointerEvents='none'` to avoid blocking video controls.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Vertical Video: Ensure 9:16 'shorts' style videos don't stretch the skeleton horizontally.\n* Cropped Videos: Handle videos where the aspect ratio is manually altered by the user before upload.\n\n",
+      "labels": [
+        "Frontend",
+        "UI-Bug",
+        "Visualization"
+      ]
+    },
+    {
+      "key": "DM-31",
+      "summary": "Feature: React Web Application Parity",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to access DiamondMind via a web browser so that I can analyze and review my swings on a desktop or larger screen.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nWhile mobile is the primary capture tool, a web interface allows for deeper analysis and better accessibility. We will leverage the existing Vite/React setup on Vercel[cite: 25, 31, 55].\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Environment: Configure the existing Vercel project to serve a responsive web UI alongside the mobile-focused views[cite: 29, 37].\n* Analysis Parity: Port the video upload and WebSocket progress tracking logic from the mobile app to the web client[cite: 13, 48].\n* Visualization: Implement the DM-30 skeletal overlay using web-compatible SVG libraries[cite: 57].\n* Responsive Design: Ensure the layout adjusts for desktop, tablet, and mobile browsers.\n* Authentication: (Future) Prepare for a shared login system so swings uploaded on mobile appear on the web.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Framework: React (Vite) with Tailwind CSS v4[cite: 57].\n* API Integration: Continue using `axios` and `httpx` to communicate with the Render Backend[cite: 57, 58].\n* Video Handling: Use standard HTML5 video tags or a React-specific wrapper for desktop playback parity with `expo-av`[cite: 57].\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Browser Compatibility: Ensure WebSocket stability across Chrome, Safari, and Firefox.\n* File Sizes: Desktop users may attempt to upload much larger raw video files than mobile users; enforce the 50MB limit at the browser level[cite: 53].\n* Drag and Drop: Implement a desktop-friendly drag-and-drop zone for video files.\n\n",
+      "labels": [
+        "Backlog",
+        "Frontend",
+        "Web"
+      ]
+    },
+    {
+      "key": "DM-30",
+      "summary": "Feature: Skeletal Overlay UI Rendering",
+      "status": "Done",
+      "priority": "Highest",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to see a skeletal overlay drawn over my swing video so that I can visually confirm the AI's tracking and analyze my body positions.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nNow that we have the landmark data and the video, we need to synchronize them and render a visual representation of the 33 MediaPipe points on the mobile UI.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Video Playback: Integrate `expo-av` to play the analyzed swing video.\n* SVG Layer: Implement a `react-native-svg` overlay that sits perfectly on top of the video component.\n* Coordinate Mapping: Scale the normalized (0.0 - 1.0) landmark coordinates to the actual pixel dimensions of the display.\n* Bones/Joints: Draw lines (bones) connecting specific joint IDs (e.g., shoulder to elbow) and circles for the landmarks.\n* Sync: Ensure the skeletal frame updates in real-time as the video plays back.\n* Performance: The overlay must render smoothly without significant lag or jitter.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Frontend: React Native with `expo-av` for video and `react-native-svg` for rendering.\n* Logic: Use a `useRef` to track video playback time and map it to the 'timestamp_ms' in the AI JSON results.\n* Assets: Define a 'POSE_CONNECTIONS' constant that maps which landmark IDs should be connected by lines.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Aspect Ratio: Handle cases where the video aspect ratio (e.g., 9:16) differs from the phone screen container.\n* Missing Data: Gracefully hide the skeleton if a specific frame has low visibility or missing landmarks.\n* Seeking: Ensure the skeleton stays in sync if the user scrubs through the video timeline.\n\n",
+      "labels": [
+        "Frontend",
+        "Mobile",
+        "Visualization"
+      ]
+    },
+    {
+      "key": "DM-29",
+      "summary": "Optimization: Mobile-Side Resolution Scaling",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want the app to downscale my high-resolution videos before uploading so that I save data and reduce the time spent waiting for AI processing.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nHigh-res 4K/60fps files can exceed 100MB and overwhelm the free-tier AI Service memory (512MB RAM). Scaling to 720p maintains landmark accuracy while significantly improving stability.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Pre-processing: Integrate a compression step immediately after the video is selected from the gallery.\n* Target Specs: Downscale to 720p (1280x720) with a maximum bitrate of 2.5 Mbps.\n* UI Feedback: Show a 'Preparing Video...' or 'Optimizing...' status bar during the compression phase.\n* Handover: The resulting compressed file must be passed to the existing UploadService logic seamlessly.\n* Stability: Ensure the app doesn't crash during memory-intensive compression on older devices.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Library: `expo-video-compressor` or `react-native-compressor`.\n* Workflow: Picker -> Compression -> Upload -> WebSocket Progress Tracking.\n* Configuration: Use 'Medium' or '720p' preset to balance speed and landmark visibility.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Low Storage: Handle errors if the user's phone has no space to save the temporary compressed file.\n* Ultra-short videos: Ensure the compressor doesn't break if a video is less than 1 second long.\n* Already Small: Skip compression if the original file is already < 720p and under 10MB.\n\n",
+      "labels": [
+        "Frontend",
+        "Mobile",
+        "Performance"
+      ]
+    },
+    {
+      "key": "DM-28",
+      "summary": "Optimization: AI Service Frame Skipping",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Developer, I want the AI Engine to process every Nth frame so that analysis finishes 2x faster on CPU-limited free-tier hardware.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nProcessing 60 frames per second is compute-heavy. For swing analysis, 30fps provides sufficient data points for skeletal rendering while cutting processing time in half.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Engine Logic: Update the `while cap.isOpened()` loop in `pose_engine.py` to skip frames based on a configurable variable.\n* Consistency: Ensure the `timestamp_ms` passed to MediaPipe correctly matches the actual video time of the frame being processed.\n* WebSocket Accuracy: The progress bar must still calculate percentage based on (current_frame / total_video_frames) even when skipping.\n* Speed: Aim for a 40-50% reduction in end-to-end processing time on Render Free Tier.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Logic: Use `if frame_count % 2 != 0: continue` for a quick 50% skip rate.\n* OpenCV: Alternatively, use `cap.set(cv2.CAP_PROP_POS_FRAMES, ...)` to seek forward for higher efficiency.\n* AI Output: The resulting JSON must still represent a continuous (though lower frequency) timeline of the swing.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* High-Speed Video: If a user uploads 120fps or 240fps slow-mo, the skipping logic should potentially scale (e.g., skip every 4 frames).\n* Last Frame: Ensure the very last frame of the video is still processed to avoid 'cutoff' data in the UI.\n* Metadata mismatch: Ensure `total_frames` in the success JSON reflects the frames *processed*, not just the raw video count.\n\n",
+      "labels": [
+        "AI-Engine",
+        "Backend",
+        "Performance"
+      ]
+    },
+    {
+      "key": "DM-26",
+      "summary": "Feature: Real-Time Analysis Progress via WebSockets",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to see a real-time progress bar during analysis so that I know exactly how much of my video has been processed.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nCurrent HTTP implementation is a 'black box' until completion. We need a persistent connection to stream frame-by-frame progress from the AI Engine to the Mobile UI.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Backend: Implement a WebSocket endpoint `/ws/analysis/{job_id}` using FastAPI.\n* AI Service: Update the processing loop to emit a 'progress_update' event after every 5-10 frames.\n* Mobile: Replace the static spinner with a percentage-based progress bar (0-100%).\n* Reliability: Handle WebSocket disconnection/reconnection if the signal drops mid-swing.\n* Cleanup: Ensure WebSocket connections are closed once the final JSON result is delivered.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Protocol: WebSockets (WSS).\n* Backend: FastAPI `WebsocketManager` to track active client connections.\n* Frontend: React Native `WebSocket` API integrated into the Analysis screen.\n\n",
+      "labels": [
+        "AI-Service",
+        "Backend",
+        "WebSockets"
+      ]
+    },
+    {
+      "key": "DM-24",
+      "summary": "Feature: Video Upload Gateway & AI Orchestration",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:bgColor=#eae6ff}\n*User Story*\n\nAs a User, I want to upload my swing video to the main Backend so that it can be stored and sent to the AI Service for analysis without timing out.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\n\nThe Main Backend (Render) acts as the secure orchestrator. It must handle incoming multi-part video streams and forward them to the Dockerized AI Service. Because video processing is heavy, we must manage timeouts and file size limits specifically.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n\n* Endpoint `POST /api/videos/upload` is active on the Main Backend.\n* Backend pulls `AI_SERVICE_URL` from environment variables for flexible routing.\n* The service uses `httpx.AsyncClient` with a minimum 60-second timeout to allow for AI processing time.\n* Successfully forwards the `UploadFile` stream without loading the entire video into RAM (memory efficiency).\n* Returns a standardized error JSON if the AI Service is unreachable or returns a 5xx error.\n\nh3. \u2699\ufe0f Technical Implementation Details\n\n* Request Flow: Client (Vite) -> Backend (FastAPI) -> AI Service (Docker/MediaPipe).\n* Timeout Config: Set `httpx` timeout to 120.0s to prevent 'Gateway Timeout' during heavy analysis.\n* Payload Limit: Restrict uploads to 50MB at the FastAPI level to prevent server exhaustion.\n* CORS: Ensure the Backend allows `POST` and `OPTIONS` from the Vercel production domain.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n\n* AI Service Cold Start: Handle the delay if the AI Service is 'sleeping' on the Render Free tier.\n* Interrupted Upload: Ensure temp files are cleaned up if a user closes the browser mid-upload.\n* Unsupported Formats: Validate that the file is an `.mp4`, `.mov`, or `.avi` before forwarding to the AI service.\n* Network Jitter: Implement a 'retry' logic (optional) if the internal connection between Render services blips.",
+      "labels": [
+        "Backend",
+        "DevOps",
+        "Integration"
+      ]
+    },
+    {
+      "key": "DM-23",
+      "summary": "Feature: Dockerize AI Service for Cloud Deployment",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a DevOps Engineer, I want to containerize the AI Service using Docker so that it can run reliably on Render (or any cloud provider) with all system-level dependencies pre-installed.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe AI Service relies on OpenCV (`cv2`) and MediaPipe. These libraries require system-level shared objects (like `libGL` and `libglib`) that are missing in standard 'Python Native' cloud environments. A Docker container is the only way to bundle these OS dependencies.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* A `Dockerfile` is created in the `ai-service/` directory.\n* The Docker build process successfully installs Python 3.12, system dependencies (`libgl1`, `libglib2.0`), and Python packages.\n* The `.task` model file is correctly copied into the container image.\n* The container exposes port 8001 and starts the FastAPI server (`uvicorn`) automatically.\n* Local testing (`docker run`) confirms the service responds to health checks.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Base Image: `python:3.12-slim` (to keep size down).\n* System Deps: Run `apt-get install -y libgl1-mesa-glx libglib2.0-0` before `pip install`.\n* Command: `CMD [\"python\", \"main.py\"]` or `uvicorn` entrypoint.\n* Port Mapping: Ensure internal port 8001 maps correctly to the host.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Model File Missing: Ensure the `.dockerignore` file doesn't accidentally exclude the `.task` file.\n* Memory Limits: MediaPipe can be RAM hungry; ensure the container isn't immediately OOM (Out of Memory) killed on free-tier hosting.\n* Architecture: Ensure the image builds correctly for Linux (amd64) even if developed on Apple Silicon (arm64).\n\n",
+      "labels": [
+        "AI",
+        "DevOps",
+        "Infrastructure"
+      ]
+    },
+    {
+      "key": "DM-21",
+      "summary": "Feature: Video Upload API & Stream Handling",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to upload a raw video file via the web interface, so that the system can receive and store it for processing without manual file access.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThe AI engine (DM-12) works on local files. We need a bridge to accept 'multipart/form-data' from the frontend, save it to a temp directory, and feed it to the engine.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* API endpoint (POST /analyze/upload) accepts 'multipart/form-data' (binary video stream).\n* Server saves the incoming stream to a temporary storage location with a unique ID.\n* Server validates file type (must be .mp4, .mov) and rejects non-video files.\n* API passes the temp file path to the DM-12 AI Engine for processing.\n* System cleans up (deletes) the temporary file after analysis is complete/returned.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Framework: FastAPI 'UploadFile'.\n* Library: 'shutil' for file saving.\n* Storage: Local 'temp/' directory (ensure it exists and is gitignored).\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Large Files: Set a hard limit (e.g., 50MB) to prevent server memory crashes.\n* Concurrent Uploads: Ensure unique filenames (UUIDs) so two users don't overwrite each other's video.\n* Cleanup Failure: If the app crashes during analysis, ensure old temp files are eventually purged.\n\n",
+      "labels": [
+        "API",
+        "Backend",
+        "Integration"
+      ]
+    },
+    {
+      "key": "DM-20",
+      "summary": "Feature: Integrated Video Import & Cloud Analysis",
+      "status": "Done",
+      "priority": "Highest",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to select a video from my camera roll so that I can analyze my previous swings using the DiamondMind AI engine.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThis is the primary data entry point. We need to bridge the mobile device's file system with our Render-hosted Backend Orchestrator.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* UI: Add an 'Upload Swing' button to the mobile dashboard using Lucide-React icons.\n* Picker: Trigger `expo-image-picker` to open the native iOS/Android video gallery.\n* Validation: Prevent uploads of files >50MB or non-video formats.\n* Transmission: Upload the file as `multipart/form-data` to the Main Backend URL.\n* User Feedback: Display a 'Processing...' loading state while the 120s AI timeout is active.\n* Success: Display the resulting landmark JSON (or a 'Success' message) in the mobile UI.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Frontend: React Native (Expo) + Tailwind (NativeWind).\n* API Client: `axios` configured with a 120,000ms timeout.\n* Permissions: Ensure `app.json` includes 'Camera Roll' permissions for iOS/Android.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* iPhone HEVC: If the device uses High Efficiency (H.265), ensure the picker allows the OS to handle standard format export.\n* Network Switch: Handle cases where the user moves from Wi-Fi to LTE mid-upload.\n* Long Processing: Ensure the phone screen doesn't go to sleep while waiting for the AI response.\n\n",
+      "labels": [
+        "Frontend",
+        "Integration",
+        "Mobile"
+      ]
+    },
+    {
+      "key": "DM-19",
+      "summary": "Feature: Pitching Analysis Mode",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Pitcher, I want to analyze my pitching mechanics so I can improve my delivery and prevent injury.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nDifferent biomechanics than hitting. Needs a separate 'Mode' in the UI and different heuristics for the AI.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* UI toggle to switch between 'Hitting' and 'Pitching' modes.\n* AI evaluates specific pitching metrics: Stride Length, Arm Slot, Release Point.\n* Distinct System Prompt for pitching feedback.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Reuse DM-12 (Skeleton Extraction).\n* New heuristic analysis module: `analyze_pitching(landmarks)`.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Camera Angle: Pitching is often filmed from behind the mound (Hitting is side view). AI must detect or ask for angle.\n* Lefties: Ensure arm slot analysis isn't inverted for left-handed pitchers.\n\n",
+      "labels": [
+        "AI",
+        "NewFeature"
+      ]
+    },
+    {
+      "key": "DM-18",
+      "summary": "Feature: Native Wrapper (Capacitor/EAS)",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Mobile User, I want to install the app from the App Store so I have native performance and offline access.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nMoving from development to production builds.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Build pipeline established for iOS (IPA) and Android (APK/AAB).\n* App icon and splash screen configured.\n* Native permissions (Camera, Microphone) correctly requested in Info.plist/Manifest.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Tooling: Expo EAS Build (preferred over Capacitor for Expo apps).\n* Config: app.json updates for bundle identifiers and versioning.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Store Rejection: Ensure 'Sign in with Apple' is present if other social logins are used (Apple Requirement).\n* Build Failures: Handle missing signing credentials.\n\n",
+      "labels": [
+        "DevOps",
+        "Mobile"
+      ]
+    },
+    {
+      "key": "DM-17",
+      "summary": "Feature: Progressive Web App (PWA)",
+      "status": "Idea",
+      "priority": "Low",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to access the app via a web browser so I can view my stats on a laptop.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nSince we use Expo, web support is built-in, but needs configuration for responsiveness and navigation.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* App renders correctly in Chrome/Safari on Desktop.\n* Layout adapts to wide screens (responsive design).\n* Deep links work on web.\n* Deployable URL (Vercel).\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Expo Web: Ensure 'react-native-web' is configured.\n* Navigation: Verify Expo Router handles URL paths correctly.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* CORS: Ensure Backend API allows requests from the Web domain.\n* Camera Access: Web browsers handle camera permissions differently than Native apps.\n\n",
+      "labels": [
+        "Expo",
+        "Web"
+      ]
+    },
+    {
+      "key": "DM-16",
+      "summary": "Feature: Age-Adaptive Prompting",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "Implement Persona Logic to tailor AI feedback based on player level.\n\nTechnical Tasks:\n1. Create backend/app/prompts.py to store distinct system instructions (10u, 14u, Varsity).\n2. Update POST /analyze endpoint to accept a level form field.\n3. Frontend: Add dropdown selector.\n4. Default to 14u.",
+      "labels": [
+        "AI",
+        "Logic"
+      ]
+    },
+    {
+      "key": "DM-15",
+      "summary": "Feature: User Profile System",
+      "status": "Idea",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to create a profile with my age and height so that the AI can calibrate its analysis for me.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nPersonalization. 10u players have different metrics than Varsity. We need to store this metadata.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* User can sign up/login (Auth).\n* Profile settings page allows editing: Name, Age Group (10u/14u/Varsity), Handedness (L/R).\n* Backend uses 'Age Group' to select the correct AI Persona (linked to DM-16).\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Auth Provider: Supabase Auth or Firebase.\n* Storage: 'users' table columns: id, email, skill_level, height_cm.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Missing Data: Handle cases where a user hasn't set an age group (Default to '14u').\n* Session Expiry: Gracefully handle token expiration during app usage.\n\n",
+      "labels": [
+        "Auth",
+        "Backend"
+      ]
+    },
+    {
+      "key": "DM-14",
+      "summary": "Feature: Text-to-Speech Feedback",
+      "status": "Idea",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Player practicing alone, I want to hear the coaching feedback via audio so I don't have to look at the screen between swings.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nAccessibility and usability feature. Converts the AI's text analysis into spoken word.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* App reads the 'Coach Feedback' summary aloud.\n* Audio playback controls (Play/Pause/Stop).\n* Configurable voice settings (optional).\n* Works in background (stretch goal).\n\nh3. \u2699\ufe0f Technical Implementation Details\n* API: ElevenLabs API (High quality) or Native OS TTS (Expo Speech).\n* Trigger: Auto-play after analysis or manual button press.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Silent Mode: Respect device silent/do-not-disturb settings.\n* Interruption: Pause speech if a phone call comes in or user navigates away.\n\n",
+      "labels": [
+        "Accessibility",
+        "UX"
+      ]
+    },
+    {
+      "key": "DM-13",
+      "summary": "Feature: Visual Stick-Figure Overlay",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Coach, I want to see a stick-figure skeleton overlaid on the video so that I can visually verify body positions.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nVisual validation of DM-12. We need to draw lines connecting the extracted coordinate points on top of the video player.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* Video player renders SVG or Canvas layer on top of video.\n* Skeleton lines connect correct joints (e.g., shoulder to elbow, elbow to wrist).\n* Overlay stays synchronized with video playback.\n* User can toggle overlay ON/OFF.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Frontend: React Native Skia or SVG.\n* Logic: Map normalized (0-1) coordinates from DM-12 JSON to screen pixel dimensions.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Aspect Ratio Mismatch: Ensure lines align correctly even if video is cropped or scaled.\n* Missing Data: Handle frames where DM-12 returned 'null' for a joint (don't draw random lines to 0,0).\n\n",
+      "labels": [
+        "Frontend",
+        "Visualization"
+      ]
+    },
+    {
+      "key": "DM-12",
+      "summary": "Feature: AI Skeleton Extraction Engine (Core)",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a System, I want to extract skeletal coordinates from a local video file path, so that raw biomechanical data is available for analysis.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nThis is the core engine of DiamondMind. We need to ingest raw video footage and output a structured time-series of skeletal coordinates. This data will power the Stick-Figure Overlay and Swing Analysis.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* System accepts a local file path (string) as input.\n* System extracts 33 key body landmarks using MediaPipe Tasks 'Heavy' model.\n* Output is a standardized JSON time-series (frame_idx, timestamp, x, y, z, visibility).\n* Processing handles occlusion and low-confidence frames gracefully.\n* Engine is decoupled from HTTP upload logic (pure processing unit).\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Model: MediaPipe Pose Landmarker (Tasks API).\n* Input: Video File Path (String).\n* Output: JSON Schema with frame_index, timestamp_ms, and landmarks.\n* Language: Python 3.12+.\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Occlusion: The bat crossing the body or the camera angle hiding the back arm.\n* Motion Blur: Fast bat speeds blurring the hands.\n* Multiple People: Ensure the model tracks the *primary* subject (the batter) if other players are in the background.\n\n",
+      "labels": [
+        "AI",
+        "ComputerVision",
+        "Core"
+      ]
+    },
+    {
+      "key": "DM-11",
+      "summary": "Feature: Delete Swing History",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a User, I want to delete old or accidental swing uploads so that I can keep my library clean.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nUsers need control over their data. This requires a destructive action that removes the record from the DB and the associated video file from storage.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* UI provides a 'Delete' button on the Swing Detail view.\n* User is prompted with a confirmation modal before deletion.\n* Backend removes the database row AND the associated video file from cloud storage.\n* List view automatically refreshes to remove the deleted item.\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Endpoint: DELETE /swings/{id}\n* Storage: Ensure cloud storage deletion (e.g., S3/Supabase Storage delete call).\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* Orphaned Files: If DB delete succeeds but Storage delete fails, log an error for cleanup.\n* Concurrency: User tries to delete a file while it is currently being analyzed.\n\n",
+      "labels": [
+        "DataManagement",
+        "UI"
+      ]
+    },
+    {
+      "key": "DM-10",
+      "summary": "Centralized Cloud Database for Persistent Storage",
+      "status": "Done",
+      "priority": "High",
+      "description": "{panel:title=User Story|bgColor=#EAE6FF}\nAs a Developer, I need a centralized cloud database to store user data and swing analysis results so that data persists across sessions and devices.\n{panel}\n\nh3. \ud83e\udde0 Context & Goal\nImplemented PostgreSQL database integration using Render's managed PostgreSQL service. The system now supports persistent storage with a three-table schema (Users, Swings, Analysis Results) with proper foreign key relationships and cascading deletes. SQLAlchemy ORM provides the data access layer, and Alembic handles database migrations.\n\nh3. \u2705 Acceptance Criteria (Definition of Done)\n* \u00e2\u0153\u2026 PostgreSQL instance provisioned and accessible via connection string (Render PostgreSQL)\n* \u00e2\u0153\u2026 Schema migration scripts created for tables: 'users', 'swings', 'analysis_results'\n* \u00e2\u0153\u2026 Backend can successfully read/write to the database\n* \u00e2\u0153\u2026 Environment variables for DB credentials are secured in .env\n* \u00e2\u0153\u2026 CRUD endpoints implemented for users and swings\n* \u00e2\u0153\u2026 Video upload pipeline saves results to database\n* \u00e2\u0153\u2026 All tests passing (user creation, swing creation, analysis storage, cascading deletes)\n\nh3. \u2699\ufe0f Technical Implementation Details\n* Database Provider: Render PostgreSQL (Internal networking for better performance)\n* \n* Schema Design:\n* - users: id, email (unique), username (unique), created_at, updated_at\n* - swings: id, user_id (FK\u00e2\u2020\u2019users), filename, video_url, created_at\n* - analysis_results: id, swing_id (FK\u00e2\u2020\u2019swings), skeletal_data (JSONB), total_frames, frames_with_person, fps, bat_trail (JSONB), phase, score, feedback, drill, drill_explanation, created_at\n* \n* Implementation:\n* - database.py: PostgreSQL connection pooling (pool_pre_ping=True, pool_size=5, max_overflow=10)\n* - models.py: SQLAlchemy ORM models with relationships and cascading deletes\n* - Alembic: Migration framework for version-controlled schema changes\n* - main.py: Startup event creates tables, CRUD endpoints, database persistence in upload pipeline\n* \n* New Endpoints:\n* - POST /api/users - Create user\n* - GET /api/users/{user_id} - Get user details\n* - GET /api/users/{user_id}/swings - Get user's swings\n* - GET /api/swings/{swing_id}/analysis - Get swing analysis\n* \n* Upload Enhancement:\n* - /api/videos/upload now accepts optional user_id parameter\n* - Background processor saves Swing and AnalysisResult to database\n* - Returns swing_id and analysis_id in WebSocket response\n* \n* Local Development:\n* - SQLite fallback when DATABASE_URL not set\n* - Tables auto-created on startup via Base.metadata.create_all()\n* - test_database.py validates all CRUD operations\n* \n* Production Deployment:\n* - DATABASE_URL environment variable (use Render Internal URL)\n* - Connection pooling handles cold starts\n* - JSONB columns in PostgreSQL for efficient JSON storage\n\nh3. \u26a0\ufe0f Edge Cases & Constraints\n* \u00e2\u0153\u2026 Connection Timeout: pool_pre_ping=True verifies connections before use, handles DB cold starts\n* \u00e2\u0153\u2026 Data Integrity: Foreign keys with ON DELETE CASCADE configured (deleting user deletes all swings and analysis)\n* \u00e2\u0153\u2026 Backward Compatibility: user_id is optional in upload endpoint, works without database\n* \u00e2\u0153\u2026 Local Development: SQLite fallback allows development without cloud database\n* \u00e2\u0153\u2026 Migration Conflicts: Alembic tracks schema versions to prevent conflicts\n* Database Size Limits: Render free tier has 1GB storage, 30-day expiration (Starter tier $7/month recommended for production)\n* Concurrent Writes: PostgreSQL handles concurrent inserts, connection pooling prevents connection exhaustion\n* JSON Data Size: skeletal_data and bat_trail stored as JSONB, indexed for efficient queries\n\n",
+      "labels": [
+        "Backend",
+        "Database",
+        "Infrastructure"
+      ]
+    },
+    {
+      "key": "DM-8",
+      "summary": "Feature: Display Timestamps in History",
+      "status": "Done",
+      "priority": "Medium",
+      "description": "As a user, I want to see WHEN I took the swing (e.g., 'Dec 23, 10:30 AM') so I can differentiate sessions."
+    }
+  ],
+  "total": 48,
+  "exported_at": "2026-01-11 09:22:03.364265"
+}
