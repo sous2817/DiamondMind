@@ -1,186 +1,176 @@
 # DiamondMind Product Roadmap
-**Generated:** 2026-01-07  
-**Backlog:** 17 stories analyzed
+
+**Last Updated:** 2026-01-11  
+**Current Phase:** Platform Stabilization & Feature Completion
 
 ---
 
-## Executive Summary
+## Product Vision
 
-Based on the current backlog, I recommend a **3-phase roadmap** that balances quick wins, foundational infrastructure, and advanced AI features. This approach ensures steady progress with logical dependencies while delivering value incrementally.
+**DiamondMind** is an AI-powered baseball swing analysis platform that provides instant, professional-grade coaching feedback through computer vision and natural language AI.
 
-**Total Estimated Effort:** ~330-438 hours (8-11 months at 10 hrs/week)
-
----
-
-## Phase 1: Core UX & Performance (Q1 2026) - IN PROGRESS
-**Goal:** Improve user experience and system stability  
-**Duration:** 7-9 weeks  
-**Effort:** ~112-138 hours  
-**Completed:** 3/4 stories ✅
-
-### Priority Order
-
-#### 1. **DM-29: Mobile-Side Resolution Scaling** ✅ COMPLETE (HIGH)
-- **Status:** Deployed 2026-01-08
-- **Impact:** Video compression infrastructure in place
-- **Effort:** 4 hours (actual)
-- **Dependencies:** None
-- **Value:** Foundation for native compression (DM-58)
-- **Notes:** Expo Go compatible, real compression pending EAS build
-
-#### 2. **DM-28: AI Service Frame Skipping** ✅ COMPLETE (HIGH)
-- **Status:** Deployed 2026-01-08
-- **Impact:** 40-50% faster processing (60-90s → 30-45s)
-- **Effort:** 2 hours (actual)
-- **Dependencies:** None
-- **Value:** Reduced CPU usage, more stable on free tier
-- **Notes:** FRAME_SKIP=2 deployed to Render
-
-#### 3. **DM-59: Frame-by-Frame Video Scrubbing** ✅ COMPLETE (HIGH)
-- **Status:** Deployed 2026-01-08
-- **Impact:** Enables precise frame-by-frame swing analysis
-- **Effort:** 8 hours (actual, including debugging)
-- **Dependencies:** None
-- **Value:** Professional video analysis tool, differentiating feature
-- **Notes:** Slider + step buttons, skeleton overlay synced
-
-#### 4. **DM-15: User Profile System** (HIGH)
-- **Why Fourth:** Foundation for personalization, enables future features
-- **Impact:** Enables age-appropriate feedback, user data management
-- **Effort:** 40-50 hours (includes auth setup)
-- **Dependencies:** None (enables DM-19)
-- **Value:** Personalization, data ownership
-
-**Phase 1 Deliverables:**
-- ✅ Stable, fast analysis (no crashes) - **ACHIEVED via DM-28/29**
-- ✅ Professional video scrubbing - **ACHIEVED via DM-59**
-- ⏳ User accounts with profiles - **PENDING (DM-15)**
-- ⏳ Foundation for personalization - **PENDING (DM-15)**
+**Target Users:**
+- Youth baseball players (10u-18u)
+- College and adult players
+- Coaches and trainers
+- Parents supporting player development
 
 ---
 
-## Phase 2: GenAI Foundation (Q2 2026)
-**Goal:** Build AI infrastructure for advanced features  
-**Duration:** 10-13 weeks  
-**Effort:** ~160-200 hours
+## Current Status
 
-### Priority Order
+### Completed (35+ features live)
+- ✅ Core pose detection and skeleton overlay
+- ✅ Video upload and async processing
+- ✅ Real-time WebSocket progress
+- ✅ Bat trail tracking (geometric)
+- ✅ Frame-by-frame playback
+- ✅ User authentication (Supabase)
+- ✅ User profiles (age, handedness, height)
+- ✅ Swing history management
+- ✅ Custom swing metadata (titles/notes)
+- ✅ Performance optimizations (frame skipping, async processing)
+- ✅ Cloud database (PostgreSQL)
+- ✅ Dockerized AI service
 
-#### 6. **DM-43: Vector Database Integration** (HIGH)
-- **Why First:** Foundation for all GenAI features
-- **Impact:** Enables RAG, similarity search, comparisons
-- **Effort:** 16-24 hours
-- **Dependencies:** None
-- **Value:** Unlocks entire GenAI roadmap
-
-#### 7. **DM-44: RAG Pipeline for Natural Language Analysis** (HIGH)
-- **Why Second:** Transforms raw data into actionable coaching
-- **Impact:** Professional, authoritative feedback
-- **Effort:** 40-50 hours
-- **Dependencies:** DM-43 (vector DB)
-- **Value:** Core differentiator, coaching quality
-
-#### 8. **DM-45: Semantic Search for Similar Swings** (MEDIUM)
-- **Why Third:** Builds on vector DB, high user value
-- **Impact:** "Pro Comps" feature, visual learning
-- **Effort:** 24-32 hours
-- **Dependencies:** DM-43 (vector DB)
-- **Value:** Unique feature, engagement driver
-
-#### 9. **DM-46: LLM Summaries for Swing Comparisons** (MEDIUM)
-- **Why Fourth:** Enhances DM-45 with explanations
-- **Impact:** Explains *why* swings are similar
-- **Effort:** 16-24 hours
-- **Dependencies:** DM-44 (LLM), DM-45 (search)
-- **Value:** Educational, user understanding
-
-#### 10. **DM-47: AI Coaching Chatbot** (MEDIUM)
-- **Why Fifth:** Advanced feature, builds on RAG
-- **Impact:** Interactive coaching, Q&A
-- **Effort:** 40-56 hours
-- **Dependencies:** DM-44 (RAG pipeline)
-- **Value:** Engagement, retention
-
-**Phase 2 Deliverables:**
-- ✅ Vector DB storing all swings
-- ✅ Natural language coaching feedback
-- ✅ Pro swing comparisons with explanations
-- ✅ Interactive AI coach chatbot
+### In Progress
+- 🚧 DM-15: User profile UI enhancements
+- 🚧 Platform stability improvements
 
 ---
 
-## Phase 3: Platform Expansion (Q3-Q4 2026)
-**Goal:** Expand reach and add advanced features  
-**Duration:** 12-16 weeks  
-**Effort:** ~120-160 hours
+## Roadmap Phases
 
-### Priority Order
+### Phase 1: Platform Stabilization (Q1 2026) - CURRENT
 
-#### 11. **DM-31: React Web Application** (MEDIUM)
-- **Why First:** Expands user base, desktop analysis
-- **Impact:** Larger screens, better for coaches
-- **Effort:** 40-56 hours
-- **Dependencies:** None (parallel to mobile)
-- **Value:** Market expansion, accessibility
+**Goal:** Complete core features and ensure production readiness
 
-#### 12. **DM-19: Pitching Analysis Mode** (MEDIUM)
-- **Why Second:** New market segment
-- **Impact:** Doubles addressable market (pitchers)
-- **Effort:** 32-40 hours
-- **Dependencies:** DM-15 (user profiles for mode selection)
-- **Value:** Market expansion, revenue potential
+**Priorities:**
+1. **Video Serving (DM-61)** - HIGH
+   - Serve videos via HTTP for mobile streaming
+   - Enable video playback in SwingDetailScreen
+   - **Impact:** Better UX, proper video access
 
-#### 13. **DM-14: Text-to-Speech Feedback** (MEDIUM)
-- **Why Third:** Accessibility, hands-free usage
-- **Impact:** Better UX for solo practice
-- **Effort:** 16-24 hours
-- **Dependencies:** DM-44 (feedback text)
-- **Value:** Accessibility, usability
+2. **Full Video Player (DM-60)** - MEDIUM
+   - Add video playback to SwingDetailScreen
+   - Include skeleton overlay and bat trail
+   - **Impact:** Complete feature parity
 
-#### 14. **DM-18: Native App Wrapper (EAS)** (MEDIUM)
-- **Why Fourth:** Production deployment
-- **Impact:** App Store presence, native performance
-- **Effort:** 24-32 hours
-- **Dependencies:** None (but benefits from all features)
-- **Value:** Professional distribution, monetization
+3. **Native Video Compression (DM-58)** - HIGH
+   - Implement real compression (post-Expo Go)
+   - Reduce upload sizes 70-80%
+   - **Impact:** Faster uploads, prevent crashes
 
-**Phase 3 Deliverables:**
-- ✅ Web application for desktop users
-- ✅ Pitching analysis mode
-- ✅ Audio feedback for hands-free practice
-- ✅ Native iOS/Android apps in stores
+**Success Metrics:**
+- All core features production-ready
+- Video playback working across all screens
+- Upload success rate > 95%
 
 ---
 
-## Deferred / Future Consideration
+### Phase 2: GenAI & Coaching (Q2 2026)
 
-### Low Priority (Phase 4+)
+**Goal:** Transform raw data into actionable coaching with AI
 
-#### **DM-17: Progressive Web App** (LOW)
-- **Why Deferred:** Overlaps with DM-31 (web app)
-- **Reconsider:** After DM-31 is complete, evaluate PWA benefits
-- **Effort:** 8-12 hours
+**Priorities:**
+1. **Vector Database (DM-43)** - HIGH
+   - Store swings for semantic search
+   - Foundation for all GenAI features
+   - **Impact:** Enables advanced AI features
 
-#### **DM-40: Video Export with Overlay** (LOWEST)
-- **Why Deferred:** Nice-to-have, complex implementation
-- **Reconsider:** After Phase 3, if user demand is high
-- **Effort:** 32-48 hours
+2. **RAG Pipeline (DM-44)** - HIGH
+   - Natural language coaching feedback
+   - Context-aware analysis
+   - **Impact:** Professional coaching quality
 
-#### **DM-53: YOLO Bat Detection Dataset** (LOW)
-- **Why Deferred:** Research project, uncertain ROI
-- **Reconsider:** If HSV tracking proves insufficient
-- **Effort:** 80-120 hours (dataset creation + training)
+3. **Semantic Search (DM-45)** - MEDIUM
+   - Find similar swings ("Pro Comps")
+   - Visual learning tool
+   - **Impact:** Unique differentiator
+
+4. **LLM Comparisons (DM-46)** - MEDIUM
+   - AI-generated swing comparison summaries
+   - Explain why swings are similar
+   - **Impact:** Educational value
+
+5. **AI Chatbot (DM-47)** - MEDIUM
+   - Interactive Q&A about swings
+   - Follow-up questions
+   - **Impact:** Engagement and retention
+
+**Success Metrics:**
+- Feedback quality score > 4.5/5
+- Chatbot engagement > 40% of users
+- Pro comp feature usage > 60%
 
 ---
 
-## Dependency Map
+### Phase 3: Platform Expansion (Q3-Q4 2026)
+
+**Goal:** Expand reach and add new modes
+
+**Priorities:**
+1. **React Web App (DM-31)** - MEDIUM
+   - Desktop browser access
+   - Larger screens for analysis
+   - **Impact:** Market expansion
+
+2. **Pitching Analysis (DM-19)** - MEDIUM
+   - Separate mode for pitching mechanics
+   - Different metrics and feedback
+   - **Impact:** Doubles addressable market
+
+3. **Native Mobile Apps (DM-18)** - MEDIUM
+   - App Store and Play Store builds
+   - Native performance
+   - **Impact:** Professional distribution
+
+4. **Text-to-Speech (DM-14)** - LOW
+   - Audio coaching feedback
+   - Hands-free practice
+   - **Impact:** Accessibility
+
+**Success Metrics:**
+- Web users: 30% of total
+- Pitching mode adoption: 20%
+- App Store rating > 4.5 stars
+
+---
+
+## Feature Backlog (Prioritized)
+
+### High Priority
+- Video HTTP serving (DM-61)
+- Native video compression (DM-58)
+- Vector database integration (DM-43)
+- RAG pipeline (DM-44)
+
+### Medium Priority
+- Full video player in detail screen (DM-60)
+- Semantic search (DM-45)
+- LLM swing comparisons (DM-46)
+- AI coaching chatbot (DM-47)
+- React web app (DM-31)
+- Pitching analysis mode (DM-19)
+- Native mobile wrapper (DM-18)
+- Text-to-speech feedback (DM-14)
+
+### Low Priority
+- Progressive Web App (DM-17)
+- YOLO bat detection dataset (DM-53)
+
+### Deferred
+- Video export with overlay (DM-40) - Complex, uncertain ROI
+
+---
+
+## Dependencies
 
 ```
 Phase 1 (Parallel):
-├─ DM-29 (Mobile Scaling) → Independent
-├─ DM-28 (Frame Skipping) → Independent
-├─ DM-38 (Video Scrubbing) → Independent
-└─ DM-15 (User Profiles) → Enables DM-19
+├─ DM-61 (Video Serving) → Independent
+├─ DM-60 (Video Player) → Needs DM-61
+└─ DM-58 (Compression) → Independent
 
 Phase 2 (Sequential):
 DM-43 (Vector DB)
@@ -192,9 +182,9 @@ DM-43 (Vector DB)
 
 Phase 3 (Parallel):
 ├─ DM-31 (Web App) → Independent
-├─ DM-19 (Pitching) → Needs DM-15
-├─ DM-14 (TTS) → Needs DM-44
-└─ DM-18 (Native) → Independent
+├─ DM-19 (Pitching) → Independent
+├─ DM-18 (Native) → Independent
+└─ DM-14 (TTS) → Needs DM-44
 ```
 
 ---
@@ -202,64 +192,95 @@ Phase 3 (Parallel):
 ## Risk Assessment
 
 ### High Risk
-- **DM-43-47 (GenAI Suite):** LLM costs, quality control, hallucinations
-  - *Mitigation:* Start with small datasets, strict prompts, budget monitoring
+- **GenAI Features (DM-43-47):** LLM costs, quality control, hallucinations
+  - *Mitigation:* Start small, strict prompts, budget monitoring
 
 ### Medium Risk
-- **DM-15 (Auth):** Security, session management
-  - *Mitigation:* Use proven auth provider (Supabase/Firebase)
-- **DM-31 (Web App):** CORS, browser compatibility
-  - *Mitigation:* Thorough testing, progressive enhancement
+- **Native Compression (DM-58):** Platform-specific implementation
+  - *Mitigation:* Use proven libraries, thorough testing
+- **Web App (DM-31):** CORS, browser compatibility
+  - *Mitigation:* Progressive enhancement, testing
 
 ### Low Risk
-- **DM-29, DM-28 (Performance):** Well-understood optimizations
-- **DM-38 (Scrubbing):** Standard video player feature
+- **Video Serving (DM-61):** Well-understood pattern
+- **Video Player (DM-60):** Reuse existing components
 
 ---
 
-## Success Metrics
+## Success Criteria
 
-### Phase 1
-- Analysis success rate: >95% (up from ~80%)
-- Average processing time: <30 seconds (down from 60s)
-- User retention: +20%
+### Platform Health
+- Uptime > 99%
+- Analysis success rate > 95%
+- Average processing time < 30s
+- User retention > 60%
 
-### Phase 2
-- Feedback quality score: >4.5/5
-- Chatbot engagement: >40% of users
-- Pro comp feature usage: >60% of users
+### Feature Adoption
+- Profile completion rate > 70%
+- Swing history usage > 80%
+- Frame-by-frame usage > 50%
 
-### Phase 3
-- Web users: 30% of total user base
-- Pitching mode adoption: 20% of users
-- App Store rating: >4.5 stars
-
----
-
-## Recommended Next Steps
-
-1. **Immediate:** Start DM-29 (Mobile Scaling) - highest impact, lowest risk
-2. **Week 2:** Parallel DM-28 (Frame Skipping) for compounding performance gains
-3. **Week 4:** Begin DM-38 (Video Scrubbing) for UX differentiation
-4. **Week 8:** Start DM-15 (User Profiles) to enable personalization
-5. **Week 12:** Transition to Phase 2 with DM-43 (Vector DB)
-
-**Budget Allocation:**
-- Phase 1: $0 (infrastructure optimization)
-- Phase 2: $100-200 (LLM API costs, vector DB)
-- Phase 3: $100 (Apple Developer, Google Play fees)
+### Growth Metrics
+- Monthly active users: 100+ (Q2), 500+ (Q4)
+- Swings analyzed: 1000+ (Q2), 5000+ (Q4)
+- User satisfaction: > 4.5/5
 
 ---
 
-## Alternative Roadmap: "GenAI First"
+## Next Steps
 
-If you want to prioritize AI differentiation over stability:
+**Immediate (Next 2 weeks):**
+1. Complete DM-15 profile UI
+2. Start DM-61 (Video HTTP serving)
+3. Plan DM-58 (Native compression)
 
-**Phase 1:** DM-43 → DM-44 → DM-45 → DM-46 (GenAI core)  
-**Phase 2:** DM-29 → DM-28 → DM-38 (Performance & UX)  
-**Phase 3:** DM-15 → DM-31 → DM-19 (Platform expansion)
+**Short Term (Next month):**
+1. Deploy DM-61 and DM-60
+2. Begin DM-58 implementation
+3. Research vector database options (DM-43)
+
+**Medium Term (Q2 2026):**
+1. Complete Phase 1 features
+2. Begin GenAI implementation
+3. Gather user feedback for Phase 3 priorities
+
+---
+
+## Budget Considerations
+
+### Phase 1: $0
+- Infrastructure optimization only
+- Use existing free tiers
+
+### Phase 2: $100-200
+- LLM API costs (OpenAI/Anthropic)
+- Vector database (Pinecone/Weaviate)
+
+### Phase 3: $100-300
+- Apple Developer account ($99/year)
+- Google Play account ($25 one-time)
+- Potential hosting upgrades
+
+**Total Estimated:** $200-500 for full roadmap
+
+---
+
+## Alternative Strategies
+
+### "GenAI First" Approach
+Prioritize AI differentiation over stability:
+- **Phase 1:** DM-43 → DM-44 → DM-45 → DM-46 (GenAI core)
+- **Phase 2:** DM-61 → DM-60 → DM-58 (Platform features)
+- **Phase 3:** DM-31 → DM-19 → DM-18 (Expansion)
 
 **Pros:** Faster time-to-market for differentiating features  
-**Cons:** Higher risk of system instability, potential user frustration
+**Cons:** Higher risk, potential stability issues  
+**Recommendation:** Stick with balanced roadmap for sustainable growth
 
-**Recommendation:** Stick with the balanced roadmap above for sustainable growth.
+---
+
+## Related Documentation
+
+- **Features:** See `FEATURES.md` for detailed feature documentation
+- **Technical:** See `CONTEXT_DOC.md` for implementation details
+- **JIRA:** See `completebacklog_20260111.json` for full ticket list
