@@ -20,7 +20,7 @@ BAT_HSV_UPPER = list(map(int, os.environ.get("BAT_HSV_UPPER", "180,255,50").spli
 # FRAME_SKIP=1 means process every frame (no skipping)
 # FRAME_SKIP=2 means process every 2nd frame (50% reduction)
 # FRAME_SKIP=3 means process every 3rd frame (67% reduction)
-FRAME_SKIP = int(os.environ.get("FRAME_SKIP", "2"))  # Default: skip every other frame
+FRAME_SKIP = int(os.environ.get("FRAME_SKIP", "1"))  # Default: skip every other frame
 
 # Standard MediaPipe 33-point topology connections
 POSE_CONNECTIONS = [

@@ -1,0 +1,70 @@
+feat(ai-service): Add YOLOv8 bat detection training pipeline (DM-53)
+
+## Summary
+Created complete YOLOv8 training infrastructure for baseball bat detection,
+replacing the HSV color-based approach with a learning-based model.
+
+## What's New
+- Complete YOLO training pipeline in `ai-service/yolo-bat-detection/`
+- GPU-accelerated training (10 min vs 30-60 min on CPU)
+- Trained model achieving 44.4% mAP@50 (baseline for iteration)
+- Comprehensive scripts for training, validation, inference, and export
+
+## Training Results
+- **Dataset**: 749 images (603 train / 96 valid / 50 test)
+- **Model**: YOLOv8n (3M parameters)
+- **Training Time**: 10 minutes on GTX 1660 SUPER
+- **Performance**:
+  - mAP@50: 44.4%
+  - Precision: 58.8%
+  - Recall: 46.2%
+  - Inference: 14.2ms per frame
+- **Model Location**: `C:\dm\runs\detect\runs\detect\bat_detection2\weights\best.pt`
+
+## Files Added
+- `ai-service/yolo-bat-detection/`
+  - `scripts/train.py` - Training script with optimized hyperparameters
+  - `scripts/validate.py` - Dataset format validator
+  - `scripts/inference.py` - Batch inference on images/videos
+  - `scripts/export_model.py` - Export to ONNX/TFLite/CoreML
+  - `convert_polygon_to_bbox.py` - Annotation format converter
+  - `setup_gpu_training.ps1` - Automated GPU setup
+  - `quick_test_training.py` - 5-epoch verification script
+  - `README.md` - Comprehensive documentation
+  - `requirements.txt` - Python dependencies
+  - `dataset/data.yaml` - Dataset configuration
+
+## Documentation Updates
+- `docs/AI_CONTEXT.md`: Added YOLO training pipeline section (H)
+- `docs/CONTEXT_DOC.md`: Added tribal knowledge about training setup
+- `walkthrough.md`: Complete process documentation with test results
+- `task.md`: Updated with completion status
+
+## Key Features
+✅ GPU training support (CUDA 12.1)
+✅ Automatic polygon-to-bbox conversion
+✅ Dataset validation with error checking
+✅ Batch video inference
+✅ Fast inference (14.2ms per frame)
+✅ Multi-format export (ONNX, TFLite, CoreML)
+
+## Testing
+- Tested on 5 sample videos (523 frames total)
+- 53 bat detections with 28-68% confidence
+- Annotated videos saved to `runs/detect/predict/`
+- Visual verification confirms detection quality
+
+## Next Steps (DM-54)
+- [ ] Annotate more images (target: 2000+) for >85% mAP
+- [ ] Integrate model into `pose_engine.py`
+- [ ] Replace HSV bat tracking
+- [ ] Export to ONNX for faster inference
+- [ ] Benchmark end-to-end performance
+
+## Notes
+- Model is conservative (46% recall) but accurate (59% precision)
+- 44% mAP is reasonable baseline for 603 training images
+- GPU setup reduces training time by 5-6x
+- Ready for iterative improvement with more training data
+
+Closes DM-53

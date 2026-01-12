@@ -52,3 +52,7 @@ frontend/.eslintcache
 # --- TESTING & COVERAGE ---
 **/coverage/
 **/.pytest_cache/
+
+# --- YOLO TRAINING OUTPUTS ---
+# Exclude all YOLO training runs (models, metrics, visualizations)
+**/runs/

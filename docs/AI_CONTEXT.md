@@ -1,6 +1,6 @@
 # DiamondMind - AI Quick Context
 
-**Last Updated:** 2026-01-11 | **Version:** 2.19
+**Last Updated:** 2026-01-11 | **Version:** 3.0
 
 ---
 
@@ -61,6 +61,51 @@ All URLs centralized in `diamondmind-mobile/src/config.js`. **Never hardcode URL
 - Users auto-created in local DB on first authenticated request
 - Profile fields: age_group, handedness, height_cm
 
+### G. Mobile App Architecture (DM-64, DM-65)
+
+**Recent Refactoring (2026-01-11):**
+1. **Centralized Theme** (`src/styles/theme.js`):
+   - Single source of truth for colors, spacing, typography
+   - Import via `import { THEME } from './src/styles/theme';`
+
+2. **Component Extraction**:
+   - `MainApp.js` (600 lines) - Upload/analysis screen logic
+   - `MainApp.styles.js` - Component-specific styles  
+   - `App.js` (300 lines) - Navigation setup only
+
+**Why This Matters:**
+- Easier to maintain (clear separation of concerns)
+- Faster onboarding (smaller, focused files)
+- Better testability (components can be tested in isolation)
+
+### H. YOLO Bat Detection Training (DM-53)
+
+**Pipeline Location:** `ai-service/yolo-bat-detection/`
+
+**Dataset:**
+- 749 annotated images (603 train / 96 valid / 50 test)
+- Single class: 'bat'
+- Converted from polygon to bounding box format
+- Roboflow export (YOLOv8 format)
+
+**Training Stack:**
+- Model: YOLOv8n (3M parameters, 8.2 GFLOPs)
+- Framework: Ultralytics 8.3
+- Training: 50 epochs, batch=8, CPU
+- Output: Best model at `runs/detect/bat_detection/weights/best.pt`
+
+**Scripts:**
+- `scripts/train.py` - Train model
+- `scripts/validate.py` - Validate dataset format
+- `scripts/inference.py` - Test on images/videos
+- `scripts/export_model.py` - Export to ONNX/TFLite
+- `convert_polygon_to_bbox.py` - Format converter
+
+**Next Steps (DM-54):**
+- Integrate trained model into `pose_engine.py`
+- Replace HSV color-based bat detection
+- Benchmark inference speed vs. accuracy
+
 ---
 
 ## 📁 Key File Locations
@@ -69,11 +114,19 @@ All URLs centralized in `diamondmind-mobile/src/config.js`. **Never hardcode URL
 diamondmind-mobile/
   src/
     config.js              ← Single source of truth for URLs
+    styles/
+      theme.js             ← Centralized theme (colors, spacing)
+    components/
+      MainApp.js           ← Upload/analysis screen (600 lines)
+      MainApp.styles.js    ← MainApp-specific styles
+      SkeletonOverlay.js   ← Pose landmark overlay
+      BatTrailOverlay.js   ← Bat path visualization
     services/
       AuthService.js       ← Supabase authentication
       UploadService.js     ← Video upload (legacy FileSystem)
       SwingService.js      ← Fetch swings (authenticated)
     screens/
+      LoginScreen.js       ← Login with password toggle
       SwingDetailScreen.js ← Video playback + overlays
       ProfileScreen.js     ← User profile management
 

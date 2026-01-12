@@ -1,7 +1,8 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { UserContext } from '../context/UserContext';
-import { LogIn } from 'lucide-react-native';
+import { LogIn, Eye, EyeOff } from 'lucide-react-native';
+import { supabase } from '../config/supabaseConfig';
 
 const THEME = {
     bg: '#F8F9FA',
@@ -18,6 +19,7 @@ export default function LoginScreen({ navigation }) {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const { login } = useContext(UserContext);
 
     const handleLogin = async () => {
@@ -42,6 +44,30 @@ export default function LoginScreen({ navigation }) {
             setError(err.message || 'Invalid email or password');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        if (!email.trim()) {
+            Alert.alert('Email Required', 'Please enter your email address to reset your password.');
+            return;
+        }
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+                redirectTo: 'https://diamondmind.app/reset-password', // Update with your actual URL
+            });
+
+            if (error) throw error;
+
+            Alert.alert(
+                'Check Your Email',
+                `We've sent a password reset link to ${email.trim()}. Please check your inbox.`,
+                [{ text: 'OK' }]
+            );
+        } catch (err) {
+            console.error('Password reset error:', err);
+            Alert.alert('Error', err.message || 'Failed to send reset email. Please try again.');
         }
     };
 
@@ -73,16 +99,36 @@ export default function LoginScreen({ navigation }) {
                         editable={!loading}
                     />
 
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Password"
-                        placeholderTextColor={THEME.subtext}
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        autoCapitalize="none"
-                        editable={!loading}
-                    />
+                    <View style={styles.passwordContainer}>
+                        <TextInput
+                            style={styles.passwordInput}
+                            placeholder="Password"
+                            placeholderTextColor={THEME.subtext}
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry={!showPassword}
+                            autoCapitalize="none"
+                            editable={!loading}
+                        />
+                        <TouchableOpacity
+                            style={styles.eyeIcon}
+                            onPress={() => setShowPassword(!showPassword)}
+                        >
+                            {showPassword ? (
+                                <Eye size={20} color={THEME.subtext} />
+                            ) : (
+                                <EyeOff size={20} color={THEME.subtext} />
+                            )}
+                        </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.forgotPasswordButton}
+                        onPress={handleForgotPassword}
+                        disabled={loading}
+                    >
+                        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                    </TouchableOpacity>
 
                     {error ? (
                         <Text style={styles.errorText}>{error}</Text>
@@ -161,6 +207,35 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: THEME.primary,
         marginBottom: 16,
+    },
+    passwordContainer: {
+        position: 'relative',
+        marginBottom: 8,
+    },
+    passwordInput: {
+        backgroundColor: THEME.card,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        borderRadius: 12,
+        padding: 16,
+        paddingRight: 48,
+        fontSize: 16,
+        color: THEME.primary,
+    },
+    eyeIcon: {
+        position: 'absolute',
+        right: 16,
+        top: 16,
+        padding: 4,
+    },
+    forgotPasswordButton: {
+        alignSelf: 'flex-end',
+        marginBottom: 16,
+    },
+    forgotPasswordText: {
+        color: THEME.accent,
+        fontSize: 14,
+        fontWeight: '600',
     },
     button: {
         backgroundColor: THEME.accent,

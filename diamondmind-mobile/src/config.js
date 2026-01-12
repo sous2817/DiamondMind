@@ -12,5 +12,5 @@ export const Config = {
 
     // Supabase Configuration (DM-15)
     SUPABASE_URL: "https://zgwxrfetbplatwpimmec.supabase.co",
-    SUPABASE_ANON_KEY: "sb_publishable_vjX51zfiL7Z_lHjkoEU4gw_lhRQWclw",
+    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpnd3hyZmV0YnBsYXR3cGltbWVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5ODU1NTksImV4cCI6MjA4MzU2MTU1OX0.pK7OCmcF6Do7Qb0OMINCTNVY_6M1b09-Ir-fw967gEg",
 };

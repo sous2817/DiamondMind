@@ -1,0 +1,59 @@
+{
+    "defaults": {
+        "priority": {
+            "name": "Medium"
+        },
+        "labels": [
+            "mobile",
+            "refactoring",
+            "code-quality"
+        ]
+    },
+    "stories": [
+        {
+            "summary": "Extract MainApp Component from App.js",
+            "priority": {
+                "name": "Medium"
+            },
+            "details": {
+                "user_story": "As a developer, I want MainApp separated into its own component file so that App.js focuses only on navigation setup and MainApp is self-contained and testable.",
+                "context": "App.js currently contains the MainApp component (600+ lines) along with navigation configuration. This makes the file difficult to navigate and test. Industry best practice is to separate concerns: App.js handles app-level setup/navigation, while feature components live in dedicated files.",
+                "acceptance_criteria": [
+                    "MainApp component moved to src/components/MainApp.js",
+                    "MainApp styles moved to src/components/MainApp.styles.js",
+                    "App.js imports MainApp from new location",
+                    "App.js reduced to ~100 lines (just navigation setup)",
+                    "App works exactly as before (no functional changes)",
+                    "No visual regressions",
+                    "MainApp uses centralized THEME from src/styles/theme.js"
+                ],
+                "technical_details": {
+                    "files_created": [
+                        "diamondmind-mobile/src/components/MainApp.js - Upload/analysis screen component",
+                        "diamondmind-mobile/src/components/MainApp.styles.js - MainApp styles"
+                    ],
+                    "files_modified": [
+                        "diamondmind-mobile/App.js - Import MainApp instead of defining it",
+                        "docs/AI_CONTEXT.md - Update key files section"
+                    ],
+                    "implementation": [
+                        "Extract MainApp function (lines 283-879) to src/components/MainApp.js",
+                        "Move all MainApp-specific styles to MainApp.styles.js",
+                        "Import THEME from src/styles/theme.js in MainApp.styles.js",
+                        "Export MainApp as default from MainApp.js",
+                        "Update App.js to import MainApp from './src/components/MainApp'",
+                        "Remove MainApp definition from App.js",
+                        "Test in Expo to verify no regressions"
+                    ]
+                },
+                "edge_cases": [
+                    "Ensure all imports (useState, useRef, useContext, etc.) are in MainApp.js",
+                    "Verify UserContext is properly imported in MainApp",
+                    "Check that video player hooks work in extracted component",
+                    "Ensure styles reference works correctly from separate file",
+                    "Validate Metro bundler resolves new component path"
+                ]
+            }
+        }
+    ]
+}

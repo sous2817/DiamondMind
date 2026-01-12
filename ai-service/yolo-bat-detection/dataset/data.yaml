@@ -1,0 +1,16 @@
+# Paths to dataset splits (relative to this file)
+train: ../dataset/train/images
+val: ../dataset/valid/images
+test: ../dataset/test/images
+
+# Number of classes
+nc: 1
+
+# Class names
+names: ['bat']
+
+# Optional: Dataset info
+# download: https://your-dataset-url.com/bat-detection.zip
+# description: Baseball bat detection dataset for DiamondMind
+# version: 1.0
+# created: 2026-01-11

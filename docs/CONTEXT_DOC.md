@@ -50,6 +50,98 @@ Mobile App
 | Auth | Supabase | Managed auth, JWT tokens, free tier |
 | Deployment | Render | Free tier, Docker support, easy setup |
 
+### Mobile App Architecture (Post-Refactor)
+
+**Component Structure:**
+```
+diamondmind-mobile/
+  src/
+    styles/
+      theme.js              ← Centralized theme (colors, spacing)
+    components/
+      MainApp.js            ← Upload/analysis screen (600 lines)
+      MainApp.styles.js     ← MainApp styles (separate for clarity)
+      SkeletonOverlay.js
+      BatTrailOverlay.js
+    screens/
+      LoginScreen.js
+      ProfileScreen.js
+      SwingDetailScreen.js
+  App.js                    ← Navigation setup only (300 lines)
+```
+
+**Design Decisions (DM-64, DM-65):**
+1. **Centralized Theme** (`src/styles/theme.js`):
+   - Single source of truth for colors, spacing, typography
+   - Prevents color inconsistencies
+   - Easy to switch themes or rebrand
+
+2. **Component Extraction** (`MainApp.js`):
+   - Separated 600-line upload/analysis component from App.js
+   - App.js now focuses solely on navigation setup
+   - Improves maintainability and testability
+   - Styles co-located with component for clarity
+
+**Why This Matters:**
+- **Before:** App.js was 917 lines (navigation + logic + styles)
+- **After:** App.js is 300 lines (navigation only), MainApp.js is 600 lines (feature logic)
+- **Benefit:** Easier to test, maintain, and onboard new developers
+
+---
+
+### C. YOLO Bat Detection Training Pipeline (DM-53)
+
+**Background:**
+The original HSV color-based bat detection (DM-33) worked as proof-of-concept but had limitations with wood bats, varying lighting, and background noise. To achieve production-grade tracking, we trained a custom YOLOv8 model.
+
+**Dataset Creation:**
+- **Annotation Tool:** Roboflow
+- **Images:** 749 total (603 train / 96 valid / 50 test)
+- **Format Challenge:** Roboflow exported polygon/segmentation format initially
+- **Solution:** Created `convert_polygon_to_bbox.py` to convert to bounding boxes
+- **Final Format:** YOLO v8 bbox (class x_center y_center width height)
+
+**Training Configuration:**
+- **Model:** YOLOv8n (nano - 3M parameters, 8.2 GFLOPs)
+- **Hardware:** GPU (NVIDIA GTX 1660 SUPER, 6GB VRAM)
+- **Epochs:** 50
+- **Batch Size:** 16 (GPU-enabled, vs 8 on CPU)
+- **Framework:** Ultralytics 8.3.252 + PyTorch 2.5.1+cu121
+- **Training Time:** 10 minutes (vs 30-60 min on CPU)
+
+**Final Metrics:**
+- **mAP@50:** 44.4% (needs improvement, target 85%+)
+- **Precision:** 58.8% (good - low false positives)
+- **Recall:** 46.2% (conservative - misses some bats)
+- **Inference Speed:** 14.2ms per frame (very fast)
+
+**GPU Setup:**
+- Uninstall CPU-only PyTorch: `pip uninstall torch torchvision -y`
+- Install CUDA version: `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121`
+- Verify: `python -c "import torch; print(torch.cuda.is_available())"`
+- Train with GPU: `--device 0` flag
+
+**Pipeline Location:** `ai-service/yolo-bat-detection/`
+
+**Key Scripts:**
+1. `scripts/train.py` - Optimized hyperparameters for bat detection
+2. `scripts/validate.py` - Dataset format checker
+3. `scripts/inference.py` - Test on videos/images
+4. `scripts/export_model.py` - Export to ONNX/TFLite
+5. `convert_polygon_to_bbox.py` - Format conversion utility
+
+**Lessons Learned:**
+- ⚠️ Roboflow has multiple YOLO export options - must use "YOLO v8" NOT "Oriented Bounding Boxes" or "Segmentation"
+- ⚠️ Training requires stopping AI service first (OpenCV file lock issue)
+- ✅ Polygon annotations can be converted to bboxes programmatically
+- ✅ CPU training is viable for small datasets (600 images)
+
+**Next Steps (DM-54):**
+- Integrate trained model (`best.pt`) into `pose_engine.py`
+- Replace HSV bat tracking with YOLO inference
+- Benchmark performance (accuracy vs. speed)
+- Consider ONNX export for faster CPU inference
+
 ---
 
 ## 2. Tribal Knowledge
