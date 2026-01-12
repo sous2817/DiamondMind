@@ -94,7 +94,7 @@ def train_bat_detector(
         save=True,             # Save checkpoints
         save_period=-1,        # Save every N epochs (-1 = only save last/best)
         cache=False,           # Cache images (True if you have RAM)
-        workers=8,             # Number of worker threads
+        workers=2,             # Number of worker threads (reduced for Windows)
         
         # Validation
         val=True,              # Validate during training
