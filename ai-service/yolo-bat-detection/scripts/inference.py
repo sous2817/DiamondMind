@@ -14,6 +14,8 @@ Usage:
 from ultralytics import YOLO
 import argparse
 import cv2
+import subprocess
+import shutil
 from pathlib import Path
 
 def run_inference(
@@ -96,8 +98,37 @@ def run_inference(
     print(f"   Total detections: {total_detections}")
     
     if save_results:
+        # Convert AVI to MP4 for better compatibility
+        output_dir = Path('../../docs/test-videos/predictions')
+        avi_files = list(output_dir.glob('*.avi'))
+        
+        if avi_files and shutil.which('ffmpeg'):
+            print(f"\n🎬 Converting {len(avi_files)} video(s) to MP4...")
+            for avi_file in avi_files:
+                mp4_file = avi_file.with_suffix('.mp4')
+                try:
+                    subprocess.run([
+                        'ffmpeg', '-i', str(avi_file),
+                        '-c:v', 'libx264',  # H.264 codec
+                        '-crf', '23',        # Quality (lower = better, 23 is good)
+                        '-preset', 'fast',   # Encoding speed
+                        '-c:a', 'aac',       # Audio codec
+                        '-b:a', '128k',      # Audio bitrate
+                        '-y',                # Overwrite output
+                        str(mp4_file)
+                    ], check=True, capture_output=True)
+                    
+                    # Delete AVI after successful conversion
+                    avi_file.unlink()
+                    print(f"   ✅ {avi_file.name} → {mp4_file.name}")
+                except subprocess.CalledProcessError as e:
+                    print(f"   ⚠️  Failed to convert {avi_file.name}: {e}")
+        elif avi_files and not shutil.which('ffmpeg'):
+            print(f"   ⚠️  ffmpeg not found - videos saved as .avi")
+            print(f"   💡 Install ffmpeg for automatic MP4 conversion")
+        
         print(f"   📁 Results saved to: docs/test-videos/predictions/")
-        print(f"   💡 Tip: Check annotated images/videos in that folder")
+        print(f"   💡 Tip: Check annotated videos in that folder")
 
 
 def real_time_detection(model_path='models/v1_baseline_603imgs/best.pt'):
