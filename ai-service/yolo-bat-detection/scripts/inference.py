@@ -100,7 +100,7 @@ def run_inference(
         print(f"   💡 Tip: Check annotated images/videos in that folder")
 
 
-def real_time_detection(model_path='runs/detect/bat_detection/weights/best.pt'):
+def real_time_detection(model_path='models/v1_baseline_603imgs/best.pt'):
     """
     Run real-time bat detection from webcam.
     Press 'q' to quit.
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run YOLOv8 Bat Detection Inference')
     
     parser.add_argument('--model', type=str,
-                        default='runs/detect/bat_detection/weights/best.pt',
+                        default='models/v1_baseline_603imgs/best.pt',
                         help='Path to trained model weights')
     parser.add_argument('--source', type=str, required=True,
                         help='Source: image path, video path, folder, or webcam (0)')
