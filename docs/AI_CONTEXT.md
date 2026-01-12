@@ -78,33 +78,40 @@ All URLs centralized in `diamondmind-mobile/src/config.js`. **Never hardcode URL
 - Faster onboarding (smaller, focused files)
 - Better testability (components can be tested in isolation)
 
-### H. YOLO Bat Detection Training (DM-53)
+### H. YOLO Bat Detection Training
 
-**Pipeline Location:** `ai-service/yolo-bat-detection/`
+**Location:** `ai-service/yolo-bat-detection/` (Reorganized structure as of 2026-01-12)
 
-**Dataset:**
-- 749 annotated images (603 train / 96 valid / 50 test)
-- Single class: 'bat'
-- Converted from polygon to bounding box format
-- Roboflow export (YOLOv8 format)
+**Project Structure:**
+- `scripts/training/` - Train, quick_test
+- `scripts/inference/` - Predict, export  
+- `scripts/annotation/` - Pre-annotate, split_dataset, validate
+- `scripts/utils/` - Conversion tools
+- `models/` - Versioned trained models
+- `tools/` - Setup scripts
 
-**Training Stack:**
-- Model: YOLOv8n (3M parameters, 8.2 GFLOPs)
-- Framework: Ultralytics 8.3
-- Training: 50 epochs, batch=8, CPU
-- Output: Best model at `runs/detect/bat_detection/weights/best.pt`
+**Model Versions:**
 
-**Scripts:**
-- `scripts/train.py` - Train model
-- `scripts/validate.py` - Validate dataset format
-- `scripts/inference.py` - Test on images/videos
-- `scripts/export_model.py` - Export to ONNX/TFLite
-- `convert_polygon_to_bbox.py` - Format converter
+**v1 (603 Roboflow images):** mAP 44.4%, Precision 58.8%, Recall 46.2%, 14.2ms/frame
+**v2 (725 mixed images):** mAP 38.0%, Precision 64.6%, Recall 35.5%, 3.5ms/frame ⚡
+- Production model - better precision, real-world optimized, 4x faster inference
 
-**Next Steps (DM-54):**
-- Integrate trained model into `pose_engine.py`
-- Replace HSV color-based bat detection
-- Benchmark inference speed vs. accuracy
+**Training:** YOLOv8n, GPU (GTX 1660), 50 epochs, ~10 min, batch 16
+
+**Key Commands:**
+```powershell
+# Train
+python scripts/training/train.py --epochs 50 --batch 16 --device 0
+
+# Annotate (Label Studio + pre-annotation)
+python scripts/annotation/split_dataset.py --source path
+python scripts/annotation/pre_annotate.py --images path
+
+# Predict
+python scripts/inference/predict.py --source video.mp4
+```
+
+**Next Steps:** 2000+ images for 85%+ mAP, integrate into pose_engine.py (DM-54)
 
 ---
 

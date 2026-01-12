@@ -89,58 +89,54 @@ diamondmind-mobile/
 
 ---
 
-### C. YOLO Bat Detection Training Pipeline (DM-53)
+### C. YOLO Bat Detection Training Pipeline
 
-**Background:**
-The original HSV color-based bat detection (DM-33) worked as proof-of-concept but had limitations with wood bats, varying lighting, and background noise. To achieve production-grade tracking, we trained a custom YOLOv8 model.
+**Challenge:** HSV color-based detection was brittle. Needed learning-based approach.
 
-**Dataset Creation:**
-- **Annotation Tool:** Roboflow
-- **Images:** 749 total (603 train / 96 valid / 50 test)
-- **Format Challenge:** Roboflow exported polygon/segmentation format initially
-- **Solution:** Created `convert_polygon_to_bbox.py` to convert to bounding boxes
-- **Final Format:** YOLO v8 bbox (class x_center y_center width height)
+**Dataset Evolution:**
+- **v1:** 603 Roboflow images → 44.4% mAP, 58.8% precision
+- **v2:** +122 real-world images (Label Studio) → 38.0% mAP, 64.6% precision, 3.5ms inference
+- **Analysis:** Lower mAP due to harder data, but better precision = production-ready
 
-**Training Configuration:**
-- **Model:** YOLOv8n (nano - 3M parameters, 8.2 GFLOPs)
-- **Hardware:** GPU (NVIDIA GTX 1660 SUPER, 6GB VRAM)
-- **Epochs:** 50
-- **Batch Size:** 16 (GPU-enabled, vs 8 on CPU)
-- **Framework:** Ultralytics 8.3.252 + PyTorch 2.5.1+cu121
-- **Training Time:** 10 minutes (vs 30-60 min on CPU)
+**Training (GPU Required):**
+```powershell
+# GPU setup (Windows)
+pip uninstall torch torchvision -y
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-**Final Metrics:**
-- **mAP@50:** 44.4% (needs improvement, target 85%+)
-- **Precision:** 58.8% (good - low false positives)
-- **Recall:** 46.2% (conservative - misses some bats)
-- **Inference Speed:** 14.2ms per frame (very fast)
+# Train (10 min on GTX 1660)
+python scripts/training/train.py --epochs 50 --batch 16 --device 0
+```
+- **Critical:** Reduce workers to 2 (Windows resource limits)
+- **Result:** 5-6x faster than CPU
 
-**GPU Setup:**
-- Uninstall CPU-only PyTorch: `pip uninstall torch torchvision -y`
-- Install CUDA version: `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121`
-- Verify: `python -c "import torch; print(torch.cuda.is_available())"`
-- Train with GPU: `--device 0` flag
+**Annotation Workflow (Label Studio):**
+1. Split data BEFORE annotating: `scripts/annotation/split_dataset.py`
+2. Pre-annotate: `scripts/annotation/pre_annotate.py --images path`
+3. Import JSON into Label Studio (local file storage)
+4. Review/correct (3x faster: 10 sec vs 30 sec per image)
+5. Export to YOLO format
 
-**Pipeline Location:** `ai-service/yolo-bat-detection/`
+**Project Structure (Reorganized 2026-01-12):**
+```
+scripts/
+  ├── training/     # train.py, quick_test.py
+  ├── inference/    # predict.py, export.py
+  ├── annotation/   # pre_annotate.py, split_dataset.py, validate_dataset.py
+  └── utils/        # convert_*.py
+models/
+  ├── v1_baseline_603imgs/
+  └── v2_realworld_725imgs/  ← Production model
+```
 
-**Key Scripts:**
-1. `scripts/train.py` - Optimized hyperparameters for bat detection
-2. `scripts/validate.py` - Dataset format checker
-3. `scripts/inference.py` - Test on videos/images
-4. `scripts/export_model.py` - Export to ONNX/TFLite
-5. `convert_polygon_to_bbox.py` - Format conversion utility
+**Key Lessons:**
+1. **Validation data must match production use** - Roboflow test set gave inflated metrics
+2. **Precision > Recall for UX** - Fewer false alarms better than catching every bat
+3. **Pre-annotation saves 5.5 hours per 1000 images**
+4. **Windows quirks:** DataLoader workers=2 max, file locks during training
+5. **Dataset size:** 600 imgs → 40% mAP, need 2000+ for 85%+ (production)
 
-**Lessons Learned:**
-- ⚠️ Roboflow has multiple YOLO export options - must use "YOLO v8" NOT "Oriented Bounding Boxes" or "Segmentation"
-- ⚠️ Training requires stopping AI service first (OpenCV file lock issue)
-- ✅ Polygon annotations can be converted to bboxes programmatically
-- ✅ CPU training is viable for small datasets (600 images)
-
-**Next Steps (DM-54):**
-- Integrate trained model (`best.pt`) into `pose_engine.py`
-- Replace HSV bat tracking with YOLO inference
-- Benchmark performance (accuracy vs. speed)
-- Consider ONNX export for faster CPU inference
+**Next:** Collect 2000+ images with proper train/valid/test split → v3 → integrate to pose_engine.py
 
 ---
 
