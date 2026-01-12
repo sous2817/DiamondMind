@@ -54,5 +54,8 @@ frontend/.eslintcache
 **/.pytest_cache/
 
 # --- YOLO TRAINING OUTPUTS ---
-# Exclude all YOLO training runs (models, metrics, visualizations)
+# Training experiments (don't commit)
+**/training_runs/
+
+# Old runs directory (deprecated, can be deleted locally)
 **/runs/

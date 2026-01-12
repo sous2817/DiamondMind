@@ -21,7 +21,7 @@ def train_bat_detector(
     imgsz=640,
     batch=16,
     device='cpu',  # Change to 'cuda' or '0' if you have GPU
-    project='runs/detect',
+    project='training_runs',  # Changed from 'runs/detect'
     name='bat_detection'
 ):
     """

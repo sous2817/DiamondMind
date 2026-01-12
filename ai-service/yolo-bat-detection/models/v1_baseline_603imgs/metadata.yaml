@@ -1,0 +1,42 @@
+model_name: bat_detection_v1_baseline
+version: 1.0.0
+date_trained: 2026-01-12
+training_time_minutes: 10
+
+architecture:
+  model: yolov8n
+  parameters: 3005843
+  gflops: 8.1
+
+dataset:
+  total_images: 749
+  train: 603
+  valid: 96
+  test: 50
+  classes: 1
+  class_names: [bat]
+
+training:
+  epochs: 50
+  batch_size: 16
+  image_size: 640
+  device: cuda:0
+  framework: ultralytics-8.3.252
+  pytorch_version: 2.5.1+cu121
+  
+metrics:
+  map50: 0.444
+  map50_95: 0.279
+  precision: 0.588
+  recall: 0.462
+  inference_ms: 14.2
+
+hardware:
+  gpu: NVIDIA GeForce GTX 1660 SUPER
+  vram_gb: 6
+  
+notes: |
+  Baseline model trained on 603 images from Roboflow.
+  Conservative detection (low false positives).
+  Suitable for proof-of-concept and comparison.
+  Needs more training data for production use (target 2000+ images).

@@ -17,7 +17,7 @@ import cv2
 from pathlib import Path
 
 def run_inference(
-    model_path='runs/detect/bat_detection/weights/best.pt',
+    model_path='models/v1_baseline_603imgs/best.pt',  # Updated path
     source='',
     conf_threshold=0.25,
     save_results=True,
