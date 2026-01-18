@@ -95,23 +95,41 @@ All URLs centralized in `diamondmind-mobile/src/config.js`. **Never hardcode URL
 **v1 (603 Roboflow images):** mAP 44.4%, Precision 58.8%, Recall 46.2%, 14.2ms/frame
 **v2 (725 mixed images):** mAP 38.0%, Precision 64.6%, Recall 35.5%, 3.5ms/frame ⚡
 - Production model - better precision, real-world optimized, 4x faster inference
+**v2.5 (2,000 images - midpoint):** Visual quality improved, no validation metrics yet
+- Used for improved pre-annotations on remaining images
 
-**Training:** YOLOv8n, GPU (GTX 1660), 50 epochs, ~10 min, batch 16
+**Training:** YOLOv8n, GPU (GTX 1660), 50 epochs
+- **Optimized (v3+):** batch 32, RAM cache, 8 workers → ~2-3 hours
+- **Unoptimized (v2.5):** batch 16, no cache, 2 workers → ~12.5 hours
 
 **Key Commands:**
 ```powershell
-# Train
-python scripts/training/train.py --epochs 50 --batch 16 --device 0
+# Train (optimized for v3)
+python scripts/training/train.py --data C:/Annotations/data.yaml --epochs 50 --batch 32 --device 0
 
 # Annotate (Label Studio + pre-annotation)
 python scripts/annotation/split_dataset.py --source path
-python scripts/annotation/pre_annotate.py --images path
+python scripts/annotation/pre_annotate.py --model path/to/best.pt --images path
+python fix_label_studio_paths.py input.json output.json train/images
 
 # Predict
-python scripts/inference/predict.py --source video.mp4
+python scripts/inference/predict.py --source video.mp4 --model path/to/best.pt
 ```
 
 **Next Steps:** 2000+ images for 85%+ mAP, integrate into pose_engine.py (DM-54)
+
+**Annotation Workflow (Label Studio):**
+1. Split dataset: `python scripts/annotation/split_dataset.py --source path`
+2. Pre-annotate: `python scripts/annotation/pre_annotate.py --model best.pt --images path/train/images`
+3. Fix paths: `python fix_label_studio_paths.py annotations.json annotations_fixed.json train/images`
+4. Import to Label Studio (configure Cloud Storage first: C:\Annotations\train)
+5. Review/correct (3x faster with pre-annotations)
+6. Export YOLO format → Train next version
+
+**Label Studio Setup:**
+- Document root: `C:\Annotations\` (environment variable)
+- Cloud Storage: `C:\Annotations\train` (project settings)
+- Must configure Storage before importing JSON (security requirement)
 
 ---
 

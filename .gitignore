@@ -59,3 +59,7 @@ frontend/.eslintcache
 
 # Old runs directory (deprecated, can be deleted locally)
 **/runs/
+
+# Large annotation JSON files (regeneratable from Label Studio)
+**/*_annotations.json
+**/*_annotations_fixed*.json

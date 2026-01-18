@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 def train_bat_detector(
+    data_yaml='dataset/data.yaml',
     model_size='yolov8n.pt',
     epochs=100,
     imgsz=640,
@@ -28,6 +29,7 @@ def train_bat_detector(
     Train YOLOv8 model for bat detection.
     
     Args:
+        data_yaml: Path to dataset configuration YAML file
         model_size: Pre-trained model to start from (yolov8n.pt, yolov8s.pt, etc.)
         epochs: Number of training epochs
         imgsz: Input image size (640, 1280, etc.)
@@ -38,11 +40,11 @@ def train_bat_detector(
     """
     
     # Verify dataset exists
-    data_yaml = Path('dataset/data.yaml')
-    if not data_yaml.exists():
+    data_yaml_path = Path(data_yaml)
+    if not data_yaml_path.exists():
         raise FileNotFoundError(
-            f"Dataset configuration not found at {data_yaml}\n"
-            "Please create dataset/data.yaml with your dataset paths."
+            f"Dataset configuration not found at {data_yaml_path}\n"
+            "Please create a data.yaml file with your dataset paths."
         )
     
     print("🏏 DiamondMind - YOLOv8 Bat Detection Training")
@@ -59,7 +61,7 @@ def train_bat_detector(
     
     # Train the model
     results = model.train(
-        data=str(data_yaml),
+        data=str(data_yaml_path),
         epochs=epochs,
         imgsz=imgsz,
         batch=batch,
@@ -75,26 +77,26 @@ def train_bat_detector(
         warmup_epochs=3.0,     # Warmup epochs
         warmup_momentum=0.8,   # Warmup initial momentum
         
-        # Data augmentation (critical for small datasets)
+        # Data augmentation (optimized for speed and quality)
         hsv_h=0.015,           # HSV-Hue augmentation
-        hsv_s=0.7,             # HSV-Saturation
-        hsv_v=0.4,             # HSV-Value
+        hsv_s=0.5,             # HSV-Saturation (reduced for speed)
+        hsv_v=0.3,             # HSV-Value (reduced for speed)
         degrees=0.0,           # Rotation (0 for bats - they're always oriented similarly)
         translate=0.1,         # Translation
-        scale=0.5,             # Scaling
+        scale=0.3,             # Scaling (reduced for speed)
         shear=0.0,             # Shear (0 for bats)
         perspective=0.0,       # Perspective (0 for bats)
         flipud=0.0,            # Vertical flip (0 - bats don't flip vertically)
         fliplr=0.5,            # Horizontal flip (50% - left/right handed batters)
-        mosaic=1.0,            # Mosaic augmentation (4 images combined)
-        mixup=0.15,            # Mixup augmentation (blend images)
+        mosaic=0.8,            # Mosaic augmentation (reduced from 1.0 for speed)
+        mixup=0.0,             # Mixup disabled (slow and marginal benefit)
         
         # Training settings
         patience=50,           # Early stopping patience (epochs)
         save=True,             # Save checkpoints
         save_period=-1,        # Save every N epochs (-1 = only save last/best)
-        cache=False,           # Cache images (True if you have RAM)
-        workers=2,             # Number of worker threads (reduced for Windows)
+        cache=True,            # Cache images in RAM (MAJOR speed boost!)
+        workers=8,             # Number of worker threads (increased for performance)
         
         # Validation
         val=True,              # Validate during training
@@ -125,14 +127,16 @@ def train_bat_detector(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train YOLOv8 Bat Detection Model')
     
+    parser.add_argument('--data', type=str, default='dataset/data.yaml',
+                        help='Path to dataset configuration YAML')
     parser.add_argument('--model', type=str, default='yolov8n.pt',
                         help='Model size: yolov8n, yolov8s, yolov8m, yolov8l, yolov8x')
     parser.add_argument('--epochs', type=int, default=100,
                         help='Number of training epochs')
     parser.add_argument('--imgsz', type=int, default=640,
                         help='Input image size (640, 1280, etc.)')
-    parser.add_argument('--batch', type=int, default=16,
-                        help='Batch size (reduce if OOM)')
+    parser.add_argument('--batch', type=int, default=32,
+                        help='Batch size (reduce if OOM, increase for better GPU utilization)')
     parser.add_argument('--device', type=str, default='cpu',
                         help='Device: cpu, cuda, 0, 1, etc.')
     parser.add_argument('--name', type=str, default='bat_detection',
@@ -142,6 +146,7 @@ if __name__ == '__main__':
     
     # Train the model
     train_bat_detector(
+        data_yaml=args.data,
         model_size=args.model,
         epochs=args.epochs,
         imgsz=args.imgsz,

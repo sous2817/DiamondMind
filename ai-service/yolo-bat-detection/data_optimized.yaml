@@ -1,0 +1,24 @@
+# YOLOv8 Dataset Configuration - OPTIMIZED for v3 Training
+# Full dataset: 5,596 images (3,917 train / 839 valid / 840 test)
+
+# Dataset root directory
+path: C:/Annotations
+
+# Train/val/test splits
+train: train/images
+# IMPORTANT: Comment out val/test OR ensure they have labels
+# Leaving them uncommented without labels wastes time during training!
+# val: valid/images  # Uncomment when you have validation labels
+# test: test/images  # Uncomment when you have test labels
+
+# Number of classes
+nc: 1
+
+# Class names
+names:
+  0: bat
+
+# PERFORMANCE NOTES:
+# - If val/test don't have labels yet, comment them out
+# - YOLO will auto-split train data for validation (90/10)
+# - Uncomment val/test only when all annotations are complete
