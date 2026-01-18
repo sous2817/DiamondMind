@@ -24,6 +24,14 @@ Thumbs.db
 !**/uploads/bat_tracker*.mp4
 **/logs/
 
+# --- AI MODELS (Large binary files) ---
+# MediaPipe models
+**/*.task
+**/*.tflite
+# YOLO models (keep in models/ with specific exceptions if needed)
+ai-service/yolo-bat-detection/models/**/*.pt
+!ai-service/yolo-bat-detection/models/production/*.pt
+
 # --- FRONTEND (React) ---
 frontend/node_modules/
 frontend/build/
@@ -63,3 +71,15 @@ frontend/.eslintcache
 # Large annotation JSON files (regeneratable from Label Studio)
 **/*_annotations.json
 **/*_annotations_fixed*.json
+
+# --- YOLO DATASETS (NEVER commit training images) ---
+ai-service/yolo-bat-detection/dataset/
+ai-service/yolo-bat-detection/DataSet/
+
+# --- LARGE VIDEO FILES ---
+# Only allow small test videos, exclude large originals
+docs/test-videos/*.mp4
+docs/test-videos/*.avi
+docs/test-videos/*.mov
+# Exception: Allow small test files (if needed)
+!docs/test-videos/test_*.mp4
