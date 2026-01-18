@@ -1,0 +1,25 @@
+# Python Virtual Environment (NEVER deploy this!)
+ai-service/venv/
+ai-service/.venv/
+
+# YOLO Training Artifacts (Not needed in production)
+ai-service/yolo-bat-detection/training_runs/
+ai-service/yolo-bat-detection/runs/
+ai-service/yolo-bat-detection/models/v1_baseline_603imgs/
+ai-service/yolo-bat-detection/models/v2*/
+
+# Annotation Files (Development only)
+ai-service/yolo-bat-detection/*_annotations*.json
+ai-service/yolo-bat-detection/dataset/
+
+# Python Cache
+ai-service/__pycache__/
+ai-service/**/__pycache__/
+ai-service/**/*.pyc
+
+# Logs and temp files
+ai-service/**/*.log
+ai-service/uploads/
+
+# Keep only production model (add exception if needed)
+# !ai-service/yolo-bat-detection/models/production/best.pt
