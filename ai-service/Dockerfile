@@ -16,7 +16,12 @@ RUN apt-get update && apt-get install -y \
 
 # 2. Install Python Dependencies
 COPY requirements.txt .
-COPY pose_landmarker_heavy.task .
+
+# Download MediaPipe pose landmarker model (29MB - not in git)
+RUN apt-get update && apt-get install -y wget && \
+    wget -q https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 3. Copy the Application Code
