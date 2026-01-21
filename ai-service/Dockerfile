@@ -27,9 +27,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 3. Copy application code
 COPY . /app
 
-# Verify YOLO v3 model exists (DM-66)
-RUN test -f yolo-bat-detection/models/production/best.pt || \
-    (echo "ERROR: YOLO v3 model not found at yolo-bat-detection/models/production/best.pt" && \
+# Verify YOLO v3 ONNX model exists (DM-66)
+RUN test -f yolo-bat-detection/models/production/best.onnx || \
+    (echo "ERROR: YOLO v3 ONNX model not found at yolo-bat-detection/models/production/best.onnx" && \
     echo "Please ensure the model file is committed to the repository." && \
     exit 1)
 

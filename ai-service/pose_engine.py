@@ -43,21 +43,25 @@ class PoseExtractor:
             min_tracking_confidence=0.5
         )
         
-        # Load YOLO v3 bat detector (DM-66)
+        # Load YOLO v3 ONNX bat detector (DM-66 - Memory optimized)
         try:
-            from ultralytics import YOLO
+            import onnxruntime as ort
             model_path = os.path.join(
                 os.path.dirname(__file__), 
-                "yolo-bat-detection/models/production/best.pt"
+                "yolo-bat-detection/models/production/best.onnx"
             )
             
             if not os.path.exists(model_path):
                 print(f"⚠️ YOLO model not found at {model_path}, using geometric fallback only")
                 self.bat_detector = None
             else:
-                self.bat_detector = YOLO(model_path)
+                # Create ONNX inference session (CPU only for Render free tier)
+                self.bat_detector = ort.InferenceSession(
+                    model_path,
+                    providers=['CPUExecutionProvider']
+                )
                 self.bat_conf_threshold = float(os.environ.get("YOLO_CONF_THRESHOLD", "0.30"))
-                print(f"✅ Loaded YOLO v3 bat detector (confidence >= {self.bat_conf_threshold})")
+                print(f"✅ Loaded YOLO v3 ONNX bat detector (confidence >= {self.bat_conf_threshold})")
         except Exception as e:
             print(f"⚠️ Failed to load YOLO model: {e}. Using geometric fallback only.")
             self.bat_detector = None
@@ -78,7 +82,7 @@ class PoseExtractor:
 
     def _detect_bat_yolo(self, frame):
         """
-        Detects bat using YOLOv8 v3 model (DM-66).
+        Detects bat using YOLOv8 v3 ONNX model (DM-66 - Memory optimized).
         Returns normalized (x, y) coordinates + confidence or None.
         """
         # Check if YOLO model is available
@@ -88,41 +92,59 @@ class PoseExtractor:
         h, w = frame.shape[:2]
         
         try:
-            # Run YOLO inference
-            results = self.bat_detector.predict(
-                source=frame,
-                conf=self.bat_conf_threshold,
-                verbose=False,
-                device='cpu'  # Use GPU if available, fallback to CPU
-            )
+            # Preprocess frame for YOLO ONNX input
+            # YOLO expects (1, 3, 640, 640) - batch, channels, height, width
+            import cv2
             
-            # Check if any detections
-            if len(results) == 0 or len(results[0].boxes) == 0:
+            # Resize and normalize
+            img = cv2.resize(frame, (640, 640))
+            img = img.transpose(2, 0, 1)  # HWC to CHW
+            img = img.astype('float32') / 255.0  # Normalize to [0, 1]
+            img = np.expand_dims(img, axis=0)  # Add batch dimension
+            
+            # Run ONNX inference
+            input_name = self.bat_detector.get_inputs()[0].name
+            outputs = self.bat_detector.run(None, {input_name: img})
+            
+            # Parse YOLO ONNX output
+            # Output shape: (1, 5, 8400) for YOLOv8n with 1 class
+            # 5 = cx, cy, w, h, confidence
+            predictions = outputs[0][0]  # Remove batch dimension -> (5, 8400)
+            
+            # Get confidence scores (last row)
+            confidences = predictions[4, :]
+            
+            # Find detections above threshold
+            valid_mask = confidences >= self.bat_conf_threshold
+            if not valid_mask.any():
                 return None
             
-            # Get highest confidence detection (boxes are pre-sorted by confidence)
-            boxes = results[0].boxes
-            best_box = boxes[0]
+            # Get best detection (highest confidence)
+            best_idx = np.argmax(confidences)
+            if confidences[best_idx] < self.bat_conf_threshold:
+                return None
             
-            # Extract bounding box coordinates
-            xyxy = best_box.xyxy[0].cpu().numpy()
-            x1, y1, x2, y2 = xyxy
+            # Extract center coordinates (normalized to 640x640)
+            cx_norm = predictions[0, best_idx]  # center x (0-640)
+            cy_norm = predictions[1, best_idx]  # center y (0-640)
             
-            # Calculate center point
-            center_x = (x1 + x2) / 2
-            center_y = (y1 + y2) / 2
+            # Convert to original frame coordinates
+            cx = cx_norm * w / 640
+            cy = cy_norm * h / 640
             
             # Apply temporal smoothing
-            smoothed_x, smoothed_y = self._smooth_bat_position(int(center_x), int(center_y))
+            smoothed_x, smoothed_y = self._smooth_bat_position(int(cx), int(cy))
             
             # Return normalized coordinates with confidence
             return {
                 "x": round(smoothed_x / w, 4),
                 "y": round(smoothed_y / h, 4),
-                "confidence": round(float(best_box.conf[0]), 3)
+                "confidence": round(float(confidences[best_idx]), 3)
             }
         except Exception as e:
             print(f"⚠️ YOLO detection error: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _detect_bat_geometric(self, frame, hand_landmarks=None):
