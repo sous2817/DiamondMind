@@ -31,6 +31,7 @@ Thumbs.db
 # YOLO models (keep in models/ with specific exceptions if needed)
 ai-service/yolo-bat-detection/models/**/*.pt
 !ai-service/yolo-bat-detection/models/production/*.pt
+!ai-service/yolo-bat-detection/models/v3_full_5329imgs/best.pt
 
 # --- FRONTEND (React) ---
 frontend/node_modules/

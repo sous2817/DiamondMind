@@ -11,6 +11,7 @@
     },
     "stories": [
         {
+            "key": "DM-66",
             "summary": "Integrate YOLO v3 Bat Detection Model to Replace HSV Tracking",
             "priority": {
                 "name": "High"
@@ -47,6 +48,7 @@
             }
         },
         {
+            "key": "DM-67",
             "summary": "Calculate Bat Speed and Velocity Metrics from YOLO Detections",
             "priority": {
                 "name": "Medium"
@@ -81,6 +83,7 @@
             }
         },
         {
+            "key": "DM-68",
             "summary": "Implement Swing Phase Detection (Load, Stride, Contact, Follow-Through)",
             "priority": {
                 "name": "Medium"
@@ -115,6 +118,7 @@
             }
         },
         {
+            "key": "DM-69",
             "summary": "Add Swing Comparison Feature with Side-by-Side Video Playback",
             "priority": {
                 "name": "Low"
@@ -149,6 +153,7 @@
             }
         },
         {
+            "key": "DM-70",
             "summary": "Calculate and Display Contact Quality Score (0-100)",
             "priority": {
                 "name": "Low"
