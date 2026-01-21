@@ -83,3 +83,13 @@ docs/test-videos/*.avi
 docs/test-videos/*.mov
 # Exception: Allow small test files (if needed)
 !docs/test-videos/test_*.mp4
+# Archive directory for historical artifacts
+archive/
+
+# Temporary annotation JSON files
+*_annotations*.json
+
+# Temporary files
+COMMIT_MESSAGE.txt
+test_frame.jpg
+test_output/
