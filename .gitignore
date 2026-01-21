@@ -70,78 +70,6 @@ frontend/.eslintcache
 
 # Large annotation JSON files (regeneratable from Label Studio)
 **/*_annotations.json
-# --- GLOBAL & SYSTEM ---
-.DS_Store
-Thumbs.db
-
-# --- PYTHON GLOBAL (Covers Backend, AI-Service, Scripts) ---
-# This automatically covers ANY folder named 'venv' or '__pycache__' in the repo
-**/venv/
-**/.venv/
-**/__pycache__/
-**/*.py[cod]
-**/*.so
-
-# --- ENV SECRETS (CRITICAL) ---
-# Ignores .env files in ANY folder (backend, ai-service, mobile, etc.)
-**/.env
-**/.env.local
-**/.env.*.local
-
-# --- LOGS & UPLOADS ---
-*.log
-**/uploads/
-# Exception: Allow specific test videos for AI debugging (prefix with 'test_' or 'bat_tracker')
-!**/uploads/test_*.mp4
-!**/uploads/bat_tracker*.mp4
-**/logs/
-
-# --- AI MODELS (Large binary files) ---
-# MediaPipe models
-**/*.task
-**/*.tflite
-# YOLO models (keep in models/ with specific exceptions if needed)
-ai-service/yolo-bat-detection/models/**/*.pt
-!ai-service/yolo-bat-detection/models/production/*.pt
-
-# --- FRONTEND (React) ---
-frontend/node_modules/
-frontend/build/
-frontend/dist/
-frontend/.eslintcache
-
-# --- MOBILE & ANDROID (Robust) ---
-# Ignore node_modules anywhere
-**/node_modules/
-
-# Ignore Android Build artifacts anywhere
-**/android/build/
-**/android/app/build/
-**/android/.gradle/
-**/*.iml
-
-# Ignore Android local properties (Keys/SDK paths)
-**/local.properties
-
-# --- IOS (Robust) ---
-**/ios/build/
-**/ios/Pods/
-**/ios/DerivedData/
-*.xcworkspace
-
-# --- TESTING & COVERAGE ---
-**/coverage/
-**/.pytest_cache/
-
-# --- YOLO TRAINING OUTPUTS ---
-# Training experiments (don't commit)
-**/training_runs/
-
-# Old runs directory (deprecated, can be deleted locally)
-**/runs/
-
-# Large annotation JSON files (regeneratable from Label Studio)
-**/*_annotations.json
 **/*_annotations_fixed*.json
 
 # --- YOLO DATASETS (NEVER commit training images) ---
@@ -151,10 +79,6 @@ ai-service/yolo-bat-detection/DataSet/
 # --- LARGE VIDEO FILES ---
 # Ignore entire test-videos directory and all subdirectories
 docs/test-videos/
-# Legacy individual file patterns (kept for reference)
-# docs/test-videos/*.mp4
-# docs/test-videos/*.avi
-# docs/test-videos/*.mov
 # Archive directory for historical artifacts
 archive/
 
