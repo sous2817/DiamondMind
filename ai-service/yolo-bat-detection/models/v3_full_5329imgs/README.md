@@ -75,7 +75,7 @@ amp: True              # Mixed precision training
 
 ## Usage
 
-### Inference on Video
+### Single Video Test
 ```python
 from ultralytics import YOLO
 
@@ -85,6 +85,28 @@ results = model.predict(
     conf=0.25,  # Confidence threshold
     save=True
 )
+```
+
+### Batch Video Testing
+Test multiple videos with detailed statistics:
+
+```powershell
+cd C:\dm\ai-service\venv\Scripts
+.\python.exe ..\test_v3_batch.py
+```
+
+This script:
+- Processes all `.mp4` videos in `C:\dm\docs\test-videos\`
+- Generates annotated videos for each
+- Creates summary report with detection stats
+- Saves results to `v3_batch_results/` folder
+
+Example output:
+```
+Video                Frames  Detections     Rate  Avg Conf     Time
+----------------------------------------------------------------------
+bat1                    202          25    12.4%     0.506     5.2s
+bat2                    180          18    10.0%     0.512     4.8s
 ```
 
 ### Inference on Images
