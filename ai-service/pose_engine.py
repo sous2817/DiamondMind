@@ -55,9 +55,17 @@ class PoseExtractor:
                 print(f"⚠️ YOLO model not found at {model_path}, using geometric fallback only")
                 self.bat_detector = None
             else:
+                # Configure ONNX session for optimal CPU performance
+                sess_options = ort.SessionOptions()
+                sess_options.intra_op_num_threads = 2  # Limit threads for Render free tier
+                sess_options.inter_op_num_threads = 1
+                sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+                sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                
                 # Create ONNX inference session (CPU only for Render free tier)
                 self.bat_detector = ort.InferenceSession(
                     model_path,
+                    sess_options=sess_options,
                     providers=['CPUExecutionProvider']
                 )
                 self.bat_conf_threshold = float(os.environ.get("YOLO_CONF_THRESHOLD", "0.30"))
