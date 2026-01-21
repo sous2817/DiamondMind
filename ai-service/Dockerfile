@@ -24,10 +24,16 @@ RUN apt-get update && apt-get install -y wget && \
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Copy the Application Code
-COPY . .
+# 3.# Copy application code
+COPY . /app
 
-# 4. Expose the Port
+# Verify YOLO v3 model exists (DM-66)
+RUN test -f yolo-bat-detection/models/v3_full_5329imgs/best.pt || \
+    (echo "ERROR: YOLO v3 model not found at yolo-bat-detection/models/v3_full_5329imgs/best.pt" && \
+    echo "Please ensure the model file is committed to the repository." && \
+    exit 1)
+
+# Expose port
 EXPOSE 8001
 
 # 5. Start the Service

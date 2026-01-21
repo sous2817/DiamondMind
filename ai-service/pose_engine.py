@@ -42,6 +42,26 @@ class PoseExtractor:
             min_detection_confidence=min_detection_confidence,
             min_tracking_confidence=0.5
         )
+        
+        # Load YOLO v3 bat detector (DM-66)
+        try:
+            from ultralytics import YOLO
+            model_path = os.path.join(
+                os.path.dirname(__file__), 
+                "yolo-bat-detection/models/v3_full_5329imgs/best.pt"
+            )
+            
+            if not os.path.exists(model_path):
+                print(f"⚠️ YOLO model not found at {model_path}, using geometric fallback only")
+                self.bat_detector = None
+            else:
+                self.bat_detector = YOLO(model_path)
+                self.bat_conf_threshold = float(os.environ.get("YOLO_CONF_THRESHOLD", "0.30"))
+                print(f"✅ Loaded YOLO v3 bat detector (confidence >= {self.bat_conf_threshold})")
+        except Exception as e:
+            print(f"⚠️ Failed to load YOLO model: {e}. Using geometric fallback only.")
+            self.bat_detector = None
+        
         # Temporal smoothing buffer for bat positions (reduces jitter)
         self.bat_position_buffer = []
 
@@ -56,10 +76,61 @@ class PoseExtractor:
             print(f"⚠️ Progress report failed: {e}")
             pass
 
-    def _detect_bat_hsv(self, frame, hand_landmarks=None):
+    def _detect_bat_yolo(self, frame):
         """
-        Detects bat position using GEOMETRIC approach (no color detection).
+        Detects bat using YOLOv8 v3 model (DM-66).
+        Returns normalized (x, y) coordinates + confidence or None.
+        """
+        # Check if YOLO model is available
+        if self.bat_detector is None:
+            return None
+        
+        h, w = frame.shape[:2]
+        
+        try:
+            # Run YOLO inference
+            results = self.bat_detector.predict(
+                source=frame,
+                conf=self.bat_conf_threshold,
+                verbose=False,
+                device='cpu'  # Use GPU if available, fallback to CPU
+            )
+            
+            # Check if any detections
+            if len(results) == 0 or len(results[0].boxes) == 0:
+                return None
+            
+            # Get highest confidence detection (boxes are pre-sorted by confidence)
+            boxes = results[0].boxes
+            best_box = boxes[0]
+            
+            # Extract bounding box coordinates
+            xyxy = best_box.xyxy[0].cpu().numpy()
+            x1, y1, x2, y2 = xyxy
+            
+            # Calculate center point
+            center_x = (x1 + x2) / 2
+            center_y = (y1 + y2) / 2
+            
+            # Apply temporal smoothing
+            smoothed_x, smoothed_y = self._smooth_bat_position(int(center_x), int(center_y))
+            
+            # Return normalized coordinates with confidence
+            return {
+                "x": round(smoothed_x / w, 4),
+                "y": round(smoothed_y / h, 4),
+                "confidence": round(float(best_box.conf[0]), 3)
+            }
+        except Exception as e:
+            print(f"⚠️ YOLO detection error: {e}")
+            return None
+    
+    def _detect_bat_geometric(self, frame, hand_landmarks=None):
+        """
+        LEGACY: Detects bat position using GEOMETRIC approach (no color detection).
         Returns normalized (x, y) coordinates or None if bat not detected.
+        
+        NOTE: This is a fallback method. Will be removed after YOLO testing is complete.
         
         Strategy:
         1. Use hand landmarks (15=left wrist, 16=right wrist) as anchor points
@@ -119,11 +190,32 @@ class PoseExtractor:
         # Apply temporal smoothing to reduce jitter
         smoothed_x, smoothed_y = self._smooth_bat_position(barrel_x, barrel_y)
         
-        # Return normalized coordinates
+        # Return normalized coordinates (no confidence for geometric)
         return {
             "x": round(smoothed_x / w, 4),
             "y": round(smoothed_y / h, 4)
         }
+    
+    def _detect_bat(self, frame, hand_landmarks=None):
+        """
+        Primary bat detection method with YOLO + geometric fallback.
+        
+        Strategy:
+        1. Try YOLO first (ML-based, production quality)
+        2. Fallback to geometric if YOLO fails (hand-based estimation)
+        
+        Returns normalized (x, y) coordinates with optional confidence.
+        """
+        # Try YOLO first
+        yolo_result = self._detect_bat_yolo(frame)
+        if yolo_result is not None:
+            return yolo_result
+        
+        # Fallback to geometric (legacy)
+        if hand_landmarks:
+            return self._detect_bat_geometric(frame, hand_landmarks)
+        
+        return None
     
     def _smooth_bat_position(self, x, y, buffer_size=5):
         """
@@ -305,14 +397,14 @@ class PoseExtractor:
                         "visibility": round(landmark.visibility, 4)
                     })
                 
-                # 2. Detect Bat Position (HSV-based)
-                bat_position = self._detect_bat_hsv(frame, results.pose_landmarks)
+                # 2. Detect Bat Position (YOLO + geometric fallback)
+                bat_position = self._detect_bat(frame, results.pose_landmarks)
                 
                 # 3. Draw Overlay
                 final_frame = self._draw_overlay(frame, results.pose_landmarks)
             else:
-                # No person detected, still try bat detection
-                bat_position = self._detect_bat_hsv(frame)
+                # No person detected, still try bat detection (YOLO only, no landmarks)
+                bat_position = self._detect_bat(frame)
                 final_frame = frame
 
             # Write frame to video

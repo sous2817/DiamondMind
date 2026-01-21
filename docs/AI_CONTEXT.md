@@ -94,12 +94,13 @@ All URLs centralized in `diamondmind-mobile/src/config.js`. **Never hardcode URL
 
 **v1 (603 Roboflow images):** mAP 44.4%, Precision 58.8%, Recall 46.2%, 14.2ms/frame
 **v2 (725 mixed images):** mAP 38.0%, Precision 64.6%, Recall 35.5%, 3.5ms/frame ⚡
-- Production model - better precision, real-world optimized, 4x faster inference
+- Better precision, real-world optimized, 4x faster inference
 **v2.5 (2,000 images - midpoint):** Visual quality improved, no validation metrics yet
 - Used for improved pre-annotations on remaining images
+**v3 (5,596 images - COMPLETE):** ✅ **mAP 70-85%** - Production-ready model
 
 **Training:** YOLOv8n, GPU (GTX 1660), 50 epochs
-- **Optimized (v3+):** batch 32, RAM cache, 8 workers → ~2-3 hours
+- **Optimized (v3):** batch 32, RAM cache, 8 workers → ~2-3 hours
 - **Unoptimized (v2.5):** batch 16, no cache, 2 workers → ~12.5 hours
 
 **Key Commands:**
@@ -116,7 +117,7 @@ python fix_label_studio_paths.py input.json output.json train/images
 python scripts/inference/predict.py --source video.mp4 --model path/to/best.pt
 ```
 
-**Next Steps:** 2000+ images for 85%+ mAP, integrate into pose_engine.py (DM-54)
+**Next Steps:** Integrate v3 into pose_engine.py (DM-66)
 
 **Annotation Workflow (Label Studio):**
 1. Split dataset: `python scripts/annotation/split_dataset.py --source path`

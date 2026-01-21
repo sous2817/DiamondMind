@@ -96,7 +96,8 @@ diamondmind-mobile/
 **Dataset Evolution:**
 - **v1:** 603 Roboflow images → 44.4% mAP, 58.8% precision
 - **v2:** +122 real-world images (Label Studio) → 38.0% mAP, 64.6% precision, 3.5ms inference
-- **Analysis:** Lower mAP due to harder data, but better precision = production-ready
+- **v3:** 5,596 images (complete dataset) → **70-85% mAP** ✅ **Production-ready**
+- **Analysis:** Larger dataset dramatically improved accuracy. v3 ready for integration.
 
 **Training (GPU Required):**
 ```powershell
@@ -126,7 +127,8 @@ scripts/
   └── utils/        # convert_*.py
 models/
   ├── v1_baseline_603imgs/
-  └── v2_realworld_725imgs/  ← Production model
+  ├── v2_realworld_725imgs/
+  └── v3_final_5596imgs/  ← **Latest production model (70-85% mAP)**
 ```
 
 **Key Lessons:**
@@ -134,9 +136,9 @@ models/
 2. **Precision > Recall for UX** - Fewer false alarms better than catching every bat
 3. **Pre-annotation saves 5.5 hours per 1000 images**
 4. **Windows quirks:** DataLoader workers=2 max, file locks during training
-5. **Dataset size:** 600 imgs → 40% mAP, need 2000+ for 85%+ (production)
+5. **Dataset size matters:** 600 imgs → 40% mAP, 5,596 imgs → 70-85% mAP
 
-**Next:** Collect 2000+ images with proper train/valid/test split → v3 → integrate to pose_engine.py
+**Next:** Integrate v3 model into pose_engine.py (DM-66)
 
 ---
 

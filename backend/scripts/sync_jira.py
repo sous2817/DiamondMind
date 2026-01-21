@@ -36,7 +36,11 @@ def format_description(details):
         desc += "{panel:title=User Story|bgColor=#EAE6FF}\n" + details["user_story"] + "\n{panel}\n\n"
 
     if "context" in details:
-        desc += "h3. 🧠 Context & Goal\n" + details["context"] + "\n\n"
+        desc += "h3. 🧠 Context & Goal\n"
+        context_text = details["context"]
+        # Replace literal \n with actual newlines
+        formatted_context = context_text.replace("\\n", "\n")
+        desc += formatted_context + "\n\n"
 
     if "acceptance_criteria" in details:
         desc += "h3. ✅ Acceptance Criteria (Definition of Done)\n"
@@ -46,9 +50,28 @@ def format_description(details):
 
     if "technical_details" in details:
         desc += "h3. ⚙️ Technical Implementation Details\n"
-        for item in details["technical_details"]:
-            desc += f"* {item}\n"
-        desc += "\n"
+        tech_details = details["technical_details"]
+        
+        # Handle different formats: string, list, or dict
+        if isinstance(tech_details, str):
+            # Replace literal \n with actual newlines
+            formatted_text = tech_details.replace("\\n", "\n")
+            desc += formatted_text + "\n\n"
+        elif isinstance(tech_details, list):
+            # Original array behavior
+            for item in tech_details:
+                desc += f"* {item}\n"
+            desc += "\n"
+        elif isinstance(tech_details, dict):
+            # Handle nested object structure
+            for key, value in tech_details.items():
+                desc += f"*{key.replace('_', ' ').title()}:*\n"
+                if isinstance(value, list):
+                    for item in value:
+                        desc += f"* {item}\n"
+                else:
+                    desc += f"{value}\n"
+                desc += "\n"
 
     if "edge_cases" in details:
         desc += "h3. ⚠️ Edge Cases & Constraints\n"
