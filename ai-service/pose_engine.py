@@ -48,7 +48,7 @@ class PoseExtractor:
             from ultralytics import YOLO
             model_path = os.path.join(
                 os.path.dirname(__file__), 
-                "yolo-bat-detection/models/v3_full_5329imgs/best.pt"
+                "yolo-bat-detection/models/production/best.pt"
             )
             
             if not os.path.exists(model_path):
