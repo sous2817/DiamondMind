@@ -1,0 +1,186 @@
+{
+    "defaults": {
+        "labels": [
+            "AI",
+            "bat-tracking",
+            "yolo"
+        ],
+        "priority": {
+            "name": "High"
+        }
+    },
+    "stories": [
+        {
+            "summary": "Integrate YOLO v3 Bat Detection Model to Replace HSV Tracking",
+            "priority": {
+                "name": "High"
+            },
+            "labels": [
+                "AI",
+                "bat-tracking",
+                "yolo",
+                "backend"
+            ],
+            "details": {
+                "user_story": "As a user, I want accurate bat tracking in all lighting conditions so that I can analyze my swing mechanics reliably without the HSV color-based tracking failures.",
+                "context": "DM-53 created the annotated dataset and trained YOLO models. The current HSV-based bat tracking in pose_engine.py is unreliable with wood bats, varying lighting, and background noise. The v3 YOLO model (trained on 5,596 images with 70-85% mAP) will provide production-grade bat detection.\n\nThis ticket integrates the trained YOLO model into the ai-service to replace the geometric HSV approach with reliable object detection.",
+                "acceptance_criteria": [
+                    "pose_engine.py loads the YOLO v3 model (best.pt) on startup",
+                    "process_video() runs YOLO inference on each frame instead of _detect_bat_hsv()",
+                    "Bat position extracted from YOLO bounding box center coordinates",
+                    "Confidence threshold set to 0.30 (validated against test set)",
+                    "Bat trail JSON includes YOLO confidence scores per frame",
+                    "HSV fallback removed (YOLO is primary detection method)",
+                    "All existing API endpoints continue to work (backward compatible)",
+                    "Performance: Inference time < 20ms per frame on GPU"
+                ],
+                "technical_details": "**Implementation:**\n\n1. **Model Loading (pose_engine.py __init__):**\n```python\nfrom ultralytics import YOLO\n\nself.bat_detector = YOLO('yolo-bat-detection/models/production/best.pt')\nself.bat_conf_threshold = 0.30\n```\n\n2. **Replace _detect_bat_hsv() with _detect_bat_yolo():**\n```python\ndef _detect_bat_yolo(self, frame):\n    results = self.bat_detector.predict(\n        source=frame,\n        conf=self.bat_conf_threshold,\n        verbose=False\n    )\n    \n    if len(results[0].boxes) == 0:\n        return None\n    \n    # Get highest confidence detection\n    box = results[0].boxes[0]\n    x_center = (box.xyxy[0][0] + box.xyxy[0][2]) / 2\n    y_center = (box.xyxy[0][1] + box.xyxy[0][3]) / 2\n    \n    h, w = frame.shape[:2]\n    return {\n        \"x\": round(float(x_center) / w, 4),\n        \"y\": round(float(y_center) / h, 4),\n        \"confidence\": round(float(box.conf[0]), 3)\n    }\n```\n\n3. **Update process_video() loop:**\n- Replace `self._detect_bat_hsv(frame, results.pose_landmarks)` calls\n- Store confidence scores in bat_position dict\n- Emit confidence in WebSocket progress updates\n\n4. **Model Deployment:**\n- Copy `yolo-bat-detection/models/v3_final_5596imgs/best.pt` to `models/production/best.pt`\n- Update Dockerfile to copy model file\n- Add model download step if not in git (alternative to git LFS)\n\n5. **Performance Optimization:**\n- Use YOLO's GPU inference if available\n- Batch processing for multiple frames (optional)\n- Model warm-up on first request\n\n**Dependencies:**\n- ultralytics >= 8.0.0 (already in requirements.txt)\n- Trained v3 model file (from DM-53)\n\n**Testing:**\n- Unit tests: YOLO detection on known images\n- Integration tests: Full video processing\n- Performance benchmarks: Compare to HSV baseline\n- Visual validation: Check bat trail accuracy",
+                "edge_cases": [
+                    "Model file missing: Log error, fall back to returning None (no bat detected)",
+                    "Multiple bats detected: Use highest confidence detection",
+                    "No bat detected in frame: Return None (same as HSV behavior)",
+                    "GPU unavailable: YOLO automatically falls back to CPU",
+                    "Model loading failure: Service startup fails with clear error message",
+                    "Very low confidence detections: Filter out detections below threshold",
+                    "Bat partially off-screen: YOLO handles naturally (trained on partial bats)"
+                ]
+            }
+        },
+        {
+            "summary": "Calculate Bat Speed and Velocity Metrics from YOLO Detections",
+            "priority": {
+                "name": "Medium"
+            },
+            "labels": [
+                "AI",
+                "bat-tracking",
+                "yolo",
+                "metrics"
+            ],
+            "details": {
+                "user_story": "As a player, I want to see my bat speed throughout the swing so that I can understand my power generation and track improvement over time.",
+                "context": "With reliable YOLO bat detection (DM-54), we can now calculate accurate bat speed by tracking position changes over time. This enables advanced swing metrics that were impossible with unreliable HSV tracking.\n\nBat speed is calculated from frame-to-frame position changes, using the video FPS and real-world calibration.",
+                "acceptance_criteria": [
+                    "Bat speed calculated for each frame (pixels/second → mph conversion)",
+                    "Peak bat speed identified and reported",
+                    "Average bat speed during swing phase calculated",
+                    "Bat acceleration/deceleration tracked",
+                    "Speed data included in analysis_results JSON",
+                    "Mobile app displays peak bat speed on results screen",
+                    "Speed displayed in mph (US) with metric option (km/h)",
+                    "Calibration factor accounts for camera distance (configurable)"
+                ],
+                "technical_details": "**Calculation Method:**\n\n1. **Frame-to-Frame Distance:**\n```python\ndef calculate_bat_speed(self, bat_positions, fps, calibration_factor=1.0):\n    speeds = []\n    for i in range(1, len(bat_positions)):\n        if bat_positions[i] is None or bat_positions[i-1] is None:\n            speeds.append(None)\n            continue\n        \n        # Pixel distance\n        dx = bat_positions[i]['x'] - bat_positions[i-1]['x']\n        dy = bat_positions[i]['y'] - bat_positions[i-1]['y']\n        pixel_distance = math.sqrt(dx**2 + dy**2)\n        \n        # Convert to real-world speed (mph)\n        # Assumes 1 pixel ≈ 0.1 inches at typical distance\n        time_delta = 1.0 / fps\n        speed_mph = (pixel_distance * calibration_factor) / time_delta\n        \n        speeds.append(round(speed_mph, 1))\n    \n    return speeds\n```\n\n2. **Peak Speed Detection:**\n- Find max(speeds) during swing phase\n- Identify frame index of peak speed\n- Store in analysis_results.bat_metrics\n\n3. **Calibration:**\n- Default: 1 pixel = 0.1 inches (adjustable)\n- Future: Auto-calibration using known reference (bat length)\n\n4. **Data Storage:**\n```json\n{\n  \"bat_metrics\": {\n    \"peak_speed_mph\": 72.3,\n    \"peak_speed_frame\": 145,\n    \"avg_speed_mph\": 45.2,\n    \"speed_at_contact\": 68.5,\n    \"speed_timeline\": [0, 12.3, 24.5, ...]\n  }\n}\n```\n\n**Mobile Display:**\n- Add \"Peak Bat Speed: 72 mph\" metric card\n- Speed graph over time (line chart)\n- Color-coded speed zones (green = good, yellow = moderate, red = slow)",
+                "edge_cases": [
+                    "Bat not detected in consecutive frames: Mark speed as null for that interval",
+                    "Extreme speed values (>100 mph): Flag as potential calibration error",
+                    "Slow-motion video: Adjust FPS-based calculation",
+                    "Camera zoom changes: Calibration factor becomes invalid",
+                    "Bat moving out of frame: Handle gracefully with partial data"
+                ]
+            }
+        },
+        {
+            "summary": "Implement Swing Phase Detection (Load, Stride, Contact, Follow-Through)",
+            "priority": {
+                "name": "Medium"
+            },
+            "labels": [
+                "AI",
+                "bat-tracking",
+                "yolo",
+                "swing-analysis"
+            ],
+            "details": {
+                "user_story": "As a coach, I want to see when each phase of the swing occurs so that I can identify timing issues and mechanical flaws in specific phases.",
+                "context": "Swing analysis requires understanding the temporal phases of a swing:\n- Setup/Load: Bat starts moving backward\n- Stride: Bat accelerates forward\n- Contact: Peak bat speed, ball contact zone\n- Follow-through: Bat decelerates after contact\n\nWith YOLO bat tracking and pose landmarks, we can automatically detect these phases using bat position, speed, and hand positions.",
+                "acceptance_criteria": [
+                    "Swing phases automatically detected from video",
+                    "Each phase has start/end frame timestamps",
+                    "Phase boundaries identified using bat speed + hand movement",
+                    "Phase data stored in analysis_results JSON",
+                    "Mobile app displays phase markers on video timeline",
+                    "Color-coded timeline shows each phase visually",
+                    "Phase durations calculated (e.g., 'Load: 0.3s, Contact: 0.1s')",
+                    "Phase detection works for both left and right-handed batters"
+                ],
+                "technical_details": "**Phase Detection Algorithm:**\n\n1. **Setup/Load Phase:**\n- Start: First frame with bat movement detected\n- End: Bat reaches maximum backward position (x-coordinate minimum)\n- Signal: Negative bat velocity (moving backward)\n\n2. **Stride Phase:**\n- Start: End of load phase\n- End: Maximum bat acceleration detected\n- Signal: Bat velocity changes from negative to positive\n\n3. **Contact Phase:**\n- Start: Frame with peak bat speed\n- End: Frame where speed drops below 80% of peak\n- Signal: Local maximum in speed timeline\n\n4. **Follow-Through:**\n- Start: End of contact phase\n- End: Bat speed drops below 20% of peak\n- Signal: Continuous deceleration\n\n**Implementation:**\n```python\ndef detect_swing_phases(bat_positions, bat_speeds, fps):\n    phases = {}\n    \n    # Find load phase (bat moving backward)\n    backward_frames = [i for i, pos in enumerate(bat_positions[1:], 1)\n                      if pos and bat_positions[i-1] and \n                      pos['x'] < bat_positions[i-1]['x']]\n    \n    if backward_frames:\n        phases['load'] = {\n            'start_frame': backward_frames[0],\n            'end_frame': backward_frames[-1],\n            'duration_ms': len(backward_frames) * (1000 / fps)\n        }\n    \n    # Find contact phase (peak speed)\n    peak_speed_frame = bat_speeds.index(max(bat_speeds))\n    peak_speed = bat_speeds[peak_speed_frame]\n    \n    contact_start = peak_speed_frame\n    contact_end = next((i for i in range(peak_speed_frame, len(bat_speeds))\n                       if bat_speeds[i] < peak_speed * 0.8), len(bat_speeds)-1)\n    \n    phases['contact'] = {\n        'start_frame': contact_start,\n        'end_frame': contact_end,\n        'peak_speed_mph': peak_speed\n    }\n    \n    return phases\n```\n\n**Mobile Visualization:**\n- Timeline bar with color-coded phases\n- Phase labels (Load, Stride, Contact, Follow-Through)\n- Tap phase to jump to that section of video",
+                "edge_cases": [
+                    "No clear backward movement: Skip load phase detection",
+                    "Multiple speed peaks: Use global maximum for contact phase",
+                    "Very short swings: Phases may overlap or be missing",
+                    "Partial swing (no follow-through): Mark follow-through as null",
+                    "Camera cuts during swing: Phase detection may fail"
+                ]
+            }
+        },
+        {
+            "summary": "Add Swing Comparison Feature with Side-by-Side Video Playback",
+            "priority": {
+                "name": "Low"
+            },
+            "labels": [
+                "mobile",
+                "ux",
+                "yolo",
+                "comparison"
+            ],
+            "details": {
+                "user_story": "As a player, I want to compare two of my swings side-by-side so that I can see what changed between a good swing and a bad swing.",
+                "context": "Players often want to compare swings to understand what makes one successful vs another. This requires:\n- Selecting two swings from history\n- Playing them side-by-side (synchronized)\n- Overlaying bat paths from both swings\n- Comparing metrics (speed, phase timing)\n\nThis feature builds on YOLO bat tracking, speed calculation, and phase detection.",
+                "acceptance_criteria": [
+                    "User can select two swings from history for comparison",
+                    "Videos play side-by-side in split-screen view",
+                    "Playback is synchronized (both start at same relative point)",
+                    "Bat trails from both swings overlaid on same canvas",
+                    "Metrics compared in table (speed, phase durations)",
+                    "Sync button to align swings by contact point",
+                    "Toggle to show/hide individual bat trails",
+                    "Works in landscape orientation for better viewing"
+                ],
+                "technical_details": "**UI Layout:**\n- Split screen: Left video | Right video\n- Shared playback controls (play/pause affects both)\n- Bat trail overlay canvas between videos\n- Metrics comparison table below videos\n\n**Synchronization:**\n1. **Contact Point Sync:**\n- Detect contact frame in both swings (peak bat speed)\n- Align playback so both reach contact simultaneously\n- Offset slower swing to match timing\n\n2. **Bat Trail Overlay:**\n- Normalize both bat trails to same coordinate system\n- Different colors for each swing (blue vs red)\n- Transparency to see overlapping paths\n\n**Implementation:**\n```jsx\n<CompareSwingsScreen>\n  <SplitView>\n    <VideoPlayer swing={swing1} ref={player1Ref} />\n    <VideoPlayer swing={swing2} ref={player2Ref} />\n  </SplitView>\n  \n  <BatTrailOverlay>\n    <BatPath data={swing1.bat_trail} color=\"blue\" />\n    <BatPath data={swing2.bat_trail} color=\"red\" />\n  </BatTrailOverlay>\n  \n  <MetricsTable>\n    <Row>\n      <Cell>{swing1.peak_speed_mph}</Cell>\n      <Cell>{swing2.peak_speed_mph}</Cell>\n    </Row>\n  </MetricsTable>\n</CompareSwingsScreen>\n```\n\n**Metrics Compared:**\n- Peak bat speed (mph)\n- Phase durations (load, stride, contact)\n- Bat path length/shape\n- Swing plane angle",
+                "edge_cases": [
+                    "Videos with different FPS: Adjust playback rate to sync",
+                    "Different camera angles: Bat trail overlay may not align well",
+                    "One swing missing data: Show comparison with 'N/A' for missing metrics",
+                    "Screen too small: Force landscape or show swings sequentially",
+                    "Memory constraints: Limit to 2 videos max, lower resolution if needed"
+                ]
+            }
+        },
+        {
+            "summary": "Calculate and Display Contact Quality Score (0-100)",
+            "priority": {
+                "name": "Low"
+            },
+            "labels": [
+                "AI",
+                "metrics",
+                "yolo",
+                "gamification"
+            ],
+            "details": {
+                "user_story": "As a player, I want a simple score that tells me how good my swing was so that I can track improvement and compete with teammates.",
+                "context": "A single 0-100 score makes swing quality easy to understand and gamifies the experience. The score combines multiple YOLO-derived metrics:\n- Bat speed (40%)\n- Swing plane consistency (30%)\n- Phase timing (20%)\n- Detection confidence (10%)\n\nThis creates a leaderboard-ready metric that encourages engagement.",
+                "acceptance_criteria": [
+                    "Contact Quality Score calculated for every swing (0-100 scale)",
+                    "Score displayed prominently on results screen",
+                    "Color-coded badge (green=85+, yellow=70-84, red=<70)",
+                    "Score breakdown shows contributing factors",
+                    "Historical graph shows score trends over time",
+                    "Leaderboard displays top scores (per user)",
+                    "Shareable score card image for social media",
+                    "Score persists in database for all swings"
+                ],
+                "technical_details": "**Scoring Formula:**\n\n```python\ndef calculate_contact_quality_score(metrics):\n    score = 0\n    \n    # 1. Bat Speed (40 points max)\n    # Pro bat speed ~70 mph, youth ~40 mph\n    speed_score = min(metrics['peak_speed_mph'] / 70 * 40, 40)\n    score += speed_score\n    \n    # 2. Swing Plane (30 points max)\n    # Ideal swing plane: -5° to +15° (slight uppercut)\n    plane_angle = metrics.get('swing_plane_angle', 0)\n    if -5 <= plane_angle <= 15:\n        plane_score = 30\n    else:\n        plane_score = max(0, 30 - abs(plane_angle - 5) * 2)\n    score += plane_score\n    \n    # 3. Phase Timing (20 points max)\n    # Contact phase should be 0.1-0.15 seconds\n    contact_duration = metrics.get('contact_phase_duration_ms', 0) / 1000\n    if 0.1 <= contact_duration <= 0.15:\n        timing_score = 20\n    else:\n        timing_score = max(0, 20 - abs(contact_duration - 0.125) * 100)\n    score += timing_score\n    \n    # 4. Detection Confidence (10 points max)\n    avg_confidence = metrics.get('avg_bat_confidence', 0)\n    confidence_score = avg_confidence * 10\n    score += confidence_score\n    \n    return round(min(score, 100), 1)\n```\n\n**Visual Design:**\n- Large circular score display: \"87/100\"\n- Progress ring around score (green fill)\n- Badge icon (trophy for high scores)\n- Score breakdown table:\n  - Bat Speed: 35/40 ⭐⭐⭐⭐\n  - Swing Plane: 28/30 ⭐⭐⭐⭐\n  - Timing: 18/20 ⭐⭐⭐⭐\n  - Confidence: 9/10 ⭐⭐⭐⭐⭐\n\n**Leaderboard:**\n- Weekly/Monthly/All-Time tabs\n- User's rank and score\n- Top 10 scores displayed\n- Filter by age group",
+                "edge_cases": [
+                    "Missing metrics: Use sensible defaults or mark score as 'incomplete'",
+                    "Outlier speeds (>100 mph): Cap at max score, flag for review",
+                    "Perfect score (100): Award special badge",
+                    "Very low score (<30): Show encouragement message, not just number",
+                    "Camera calibration off: Score may be artificially high/low"
+                ]
+            }
+        }
+    ]
+}

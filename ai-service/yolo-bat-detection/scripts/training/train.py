@@ -20,8 +20,8 @@ def train_bat_detector(
     model_size='yolov8n.pt',
     epochs=100,
     imgsz=640,
-    batch=16,
-    device='cpu',  # Change to 'cuda' or '0' if you have GPU
+    batch=16,  # Reduced from 32 due to GPU memory constraints
+    device='0',  # GPU by default (use 'cpu' if no GPU available)
     project='training_runs',  # Changed from 'runs/detect'
     name='bat_detection'
 ):
@@ -95,8 +95,8 @@ def train_bat_detector(
         patience=50,           # Early stopping patience (epochs)
         save=True,             # Save checkpoints
         save_period=-1,        # Save every N epochs (-1 = only save last/best)
-        cache=True,            # Cache images in RAM (MAJOR speed boost!)
-        workers=8,             # Number of worker threads (increased for performance)
+        cache='disk',          # Cache images on disk (RAM is too much for 5.3k images)
+        workers=4,             # Reduced from 8 to save memory
         
         # Validation
         val=True,              # Validate during training
@@ -135,7 +135,7 @@ if __name__ == '__main__':
                         help='Number of training epochs')
     parser.add_argument('--imgsz', type=int, default=640,
                         help='Input image size (640, 1280, etc.)')
-    parser.add_argument('--batch', type=int, default=32,
+    parser.add_argument('--batch', type=int, default=16,
                         help='Batch size (reduce if OOM, increase for better GPU utilization)')
     parser.add_argument('--device', type=str, default='cpu',
                         help='Device: cpu, cuda, 0, 1, etc.')
