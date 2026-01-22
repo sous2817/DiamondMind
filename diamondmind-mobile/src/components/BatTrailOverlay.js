@@ -103,11 +103,11 @@ const BatTrailOverlay = ({
                     <Circle
                         cx={offsetX + (currentBatPos.x * displayWidth)}
                         cy={offsetY + (currentBatPos.y * displayHeight)}
-                        r="10"
+                        r="5"
                         fill="#FF0000"
                         opacity="1"
                         stroke="#FFFFFF"
-                        strokeWidth="2"
+                        strokeWidth="1"
                     />
                 )}
             </Svg>
