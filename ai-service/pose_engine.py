@@ -3,6 +3,7 @@ import cv2
 import requests
 import os
 import numpy as np
+import math
 
 # 1. Parameterized URL with Env Var override
 DEFAULT_BACKEND = "https://diamondmind-backend-yalf.onrender.com"
@@ -322,6 +323,44 @@ class PoseExtractor:
             return int(avg_x), int(avg_y)
         
         return x, y
+
+    # OneEuroFilter implementation for smoothing jitter
+    class OneEuroFilter:
+        def __init__(self, t0, x0, dx0=0.0, min_cutoff=1.0, beta=0.0, d_cutoff=1.0):
+            """Initialize the one euro filter."""
+            self.t_prev = t0
+            self.x_prev = x0
+            self.dx_prev = dx0
+            self.min_cutoff = min_cutoff
+            self.beta = beta
+            self.d_cutoff = d_cutoff
+
+        def smoothing_factor(self, t_e, cutoff):
+            r = 2 * math.pi * cutoff * t_e
+            return r / (r + 1)
+
+        def exponential_smoothing(self, a, x, x_prev):
+            return a * x + (1 - a) * x_prev
+
+        def __call__(self, t, x):
+            """Compute the filtered signal."""
+            t_e = t - self.t_prev
+
+            # The filtered derivative of the signal.
+            a_d = self.smoothing_factor(t_e, self.d_cutoff)
+            dx = (x - self.x_prev) / t_e
+            dx_hat = self.exponential_smoothing(a_d, dx, self.dx_prev)
+
+            # The filtered signal.
+            cutoff = self.min_cutoff + self.beta * abs(dx_hat)
+            a = self.smoothing_factor(t_e, cutoff)
+            x_hat = self.exponential_smoothing(a, x, self.x_prev)
+
+            self.t_prev = t
+            self.x_prev = x_hat
+            self.dx_prev = dx_hat
+
+            return x_hat
     
     def _detect_bat_color_only(self, frame):
         """
@@ -419,6 +458,18 @@ class PoseExtractor:
         frame_count = 0
         frames = []
         valid_frames = 0
+        
+        # Initialize filters for smoothing
+        landmark_filters = []
+        bat_filter_x = None
+        bat_filter_y = None
+        
+        # Maintain state for frame filling (to fix 1:1 mapping lag)
+        last_frame_data = {
+            "landmarks": None,
+            "bat_position": None
+        }
+
 
         # --- VIDEO WRITER SETUP ---
         output_filename = f"analyzed_{job_id}.mp4" if job_id else "analyzed_output.mp4"
@@ -446,22 +497,16 @@ class PoseExtractor:
             should_process = (frame_count % FRAME_SKIP == 0) or is_first_frame or is_last_frame
             
             if not should_process:
-                # Skip processing, but still write frame to output video
-                out.write(frame)
-                
-                # Add placeholder to JSON with null landmarks
+                # SKIP PROCESSING but fill with previous data for continuity (1:1 mapping)
+                # This fixes the "frames behind" lag issue by ensuring frames list stays in sync with video time
                 frames.append({
                     "timestamp": timestamp_ms,
-                    "landmarks": None,  # Skipped frame
-                    "bat_position": None
+                    "landmarks": last_frame_data["landmarks"], # Reuse last known
+                    "bat_position": last_frame_data["bat_position"] # Reuse last known
                 })
-                
-                # Report progress even for skipped frames
-                if job_id and frame_count % 10 == 0:
-                    percent = (frame_count / total_frames) * 100
-                    self.report_progress(job_id, percent)
-                
-                continue
+                # Still write frame so output video length is correct
+                out.write(frame)
+                continue # Skip actual processing
             
             # Process frame (only for non-skipped frames)
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -473,28 +518,74 @@ class PoseExtractor:
             if results.pose_landmarks:
                 valid_frames += 1
                 
-                # 1. Build JSON Data for Landmarks
-                landmarks_array = []
-                for landmark in results.pose_landmarks.landmark:
-                    landmarks_array.append({
-                        "x": round(landmark.x, 4),
-                        "y": round(landmark.y, 4),
-                        "z": round(landmark.z, 4),
-                        "visibility": round(landmark.visibility, 4)
-                    })
+                # --- SMOOTHING LOGIC ---
+                # Initialize filters on first valid frame
+                if not landmark_filters:
+                    # One filter per coordinate (x, y) * 33 landmarks = 66 filters
+                    landmark_filters = [
+                        (self.OneEuroFilter(t_sec, lm.x, min_cutoff=1.0, beta=0.007),
+                         self.OneEuroFilter(t_sec, lm.y, min_cutoff=1.0, beta=0.007))
+                        for lm in results.pose_landmarks.landmark
+                    ]
                 
-                # 2. Detect Bat Position (YOLO + geometric fallback)
+                # Apply smoothing
+                smoothed_landmarks = []
+                for i, lm in enumerate(results.pose_landmarks.landmark):
+                    if i < len(landmark_filters):
+                        filter_x, filter_y = landmark_filters[i]
+                        smooth_x = filter_x(t_sec, lm.x)
+                        smooth_y = filter_y(t_sec, lm.y)
+                        
+                        # Update the landmark object for drawing
+                        lm.x = smooth_x
+                        lm.y = smooth_y
+                        
+                        smoothed_landmarks.append({
+                            "x": round(smooth_x, 4),
+                            "y": round(smooth_y, 4),
+                            "z": round(lm.z, 4),
+                            "visibility": round(lm.visibility, 4)
+                        })
+                    else:
+                        smoothed_landmarks.append({
+                            "x": lm.x, "y": lm.y, "z": lm.z, "visibility": lm.visibility
+                        })
+                
+                landmarks_array = smoothed_landmarks
+                
+                # Draw overlay using smoothed landmarks
+                frame = self._draw_overlay(frame, results.pose_landmarks)
+                
+                # 2. Bat Detection
                 bat_position = self._detect_bat(frame, results.pose_landmarks)
                 
-                # 3. Draw Overlay
-                final_frame = self._draw_overlay(frame, results.pose_landmarks)
+                # Smooth bat position
+                if bat_position:
+                    if bat_filter_x is None:
+                        bat_filter_x = self.OneEuroFilter(t_sec, bat_position['x'], min_cutoff=0.1, beta=0.1) # Less jitter allowed
+                        bat_filter_y = self.OneEuroFilter(t_sec, bat_position['y'], min_cutoff=0.1, beta=0.1)
+                    
+                    b_x = bat_filter_x(t_sec, bat_position['x'])
+                    b_y = bat_filter_y(t_sec, bat_position['y'])
+                    
+                    bat_position['x'] = round(b_x, 4)
+                    bat_position['y'] = round(b_y, 4)
+                    
+                    # Draw bat marker
+                    bx, by = int(b_x * width), int(b_y * height)
+                    cv2.circle(frame, (bx, by), 8, (0, 255, 255), -1) # Yellow dot
             else:
                 # No person detected, still try bat detection (YOLO only, no landmarks)
                 bat_position = self._detect_bat(frame)
-                final_frame = frame
+            
+            # Save for next frame (interpolation/filling)
+            last_frame_data = {
+                "landmarks": landmarks_array,
+                "bat_position": bat_position
+            }
 
             # Write frame to video
-            out.write(final_frame)
+            out.write(frame)
 
             # Add to JSON list
             frames.append({
