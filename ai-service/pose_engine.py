@@ -489,6 +489,7 @@ class PoseExtractor:
 
             frame_count += 1  # Increment BEFORE skip check
             timestamp_ms = ((frame_count - 1) / fps) * 1000  # Adjust for 0-indexed
+            t_sec = timestamp_ms / 1000.0
             
             # DM-28: Frame skipping logic
             # Always process first frame and last frame
