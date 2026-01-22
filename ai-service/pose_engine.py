@@ -345,6 +345,10 @@ class PoseExtractor:
         def __call__(self, t, x):
             """Compute the filtered signal."""
             t_e = t - self.t_prev
+            
+            if t_e <= 0.0:
+                return x
+
 
             # The filtered derivative of the signal.
             a_d = self.smoothing_factor(t_e, self.d_cutoff)
