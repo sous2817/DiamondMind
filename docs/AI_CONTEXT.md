@@ -178,7 +178,7 @@ ai-service/
 AI_SERVICE_URL=https://dm-ai-service.onrender.com
 DATABASE_URL=postgresql://...
 SUPABASE_URL=https://zgwxrfetbplatwpimmec.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGci... (secret!)
+SUPABASE_SERVICE_KEY=[REDACTED]
 ```
 
 ### AI Service (Render)
