@@ -12,7 +12,7 @@
 - **Mobile:** React Native (Expo SDK 52)
 - **Backend:** Python FastAPI (Render)
 - **AI Service:** Python 3.12 + MediaPipe (Docker on Render)
-- **Database:** PostgreSQL (Render)
+- **Database:** PostgreSQL (Local via Docker for dev, Render for production)
 - **Auth:** Supabase (JWT-based)
 
 **Architecture:** Microservices (3-tier: Mobile → API Gateway → AI Worker)

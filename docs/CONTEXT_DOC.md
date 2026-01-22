@@ -46,7 +46,7 @@ Mobile App
 | Mobile | Expo SDK 52 | Cross-platform, fast iteration |
 | API Gateway | FastAPI | Async support, auto-docs, Python ecosystem |
 | AI Worker | MediaPipe | Best-in-class pose detection, free |
-| Database | PostgreSQL | Relational data, JSONB support |
+| Database | PostgreSQL | Relational data, JSONB support, local Docker for dev |
 | Auth | Supabase | Managed auth, JWT tokens, free tier |
 | Deployment | Render | Free tier, Docker support, easy setup |
 

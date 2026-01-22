@@ -77,8 +77,8 @@ const BatTrailOverlay = ({
                     const age = batPositions.length - index - 1; // 0 = newest, length-1 = oldest
                     const opacity = 1.0 - (age / batPositions.length) * 0.8; // Range: 1.0 → 0.2
 
-                    // Calculate size: newer dots slightly larger
-                    const size = 8 - (age / batPositions.length) * 3; // Range: 8 → 5
+                    // Calculate size: newer dots slightly larger (reduced by 50%)
+                    const size = 4 - (age / batPositions.length) * 1.5; // Range: 4 → 2.5
 
                     // Color based on confidence (if available from YOLO)
                     // High confidence = yellow, low confidence = orange

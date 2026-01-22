@@ -75,34 +75,39 @@ async def startup():
     
     # Run Alembic migrations automatically (for production)
     try:
-        from alembic.config import Config
-        from alembic import command
+        # TEMPORARY: Skip Alembic for local Postgres setup - use direct table creation
+        # from alembic.config import Config
+        # from alembic import command
         import os
         from pathlib import Path
         
-        # Only run migrations if DATABASE_URL is set (production)
-        if os.getenv("DATABASE_URL"):
-            logger.info("📊 Running database migrations...")
-            
-            # Get the directory where this file is located
-            current_dir = Path(__file__).parent.parent
-            alembic_ini_path = current_dir / "alembic.ini"
-            
-            logger.info(f"📁 Using alembic.ini from: {alembic_ini_path}")
-            
-            alembic_cfg = Config(str(alembic_ini_path))
-            # Set the script location relative to alembic.ini
-            alembic_cfg.set_main_option("script_location", str(current_dir / "alembic"))
-            
-            command.upgrade(alembic_cfg, "head")
-            logger.info("✅ Database migrations complete")
-        else:
-            # Local development - just create tables
-            Base.metadata.create_all(bind=engine)
-            logger.info("✅ Database tables created/verified (local SQLite)")
+        # # Only run migrations if DATABASE_URL is set (production)
+        # if os.getenv("DATABASE_URL"):
+        #     logger.info("📊 Running database migrations...")
+        #     
+        #     # Get the directory where this file is located
+        #     current_dir = Path(__file__).parent.parent
+        #     alembic_ini_path = current_dir / "alembic.ini"
+        #     
+        #     logger.info(f"📁 Using alembic.ini from: {alembic_ini_path}")
+        #     
+        #     alembic_cfg = Config(str(alembic_ini_path))
+        #     # Set the script location relative to alembic.ini
+        #     alembic_cfg.set_main_option("script_location", str(current_dir / "alembic"))
+        #     
+        #     command.upgrade(alembic_cfg, "head")
+        #     logger.info("✅ Database migrations complete")
+        # else:
+        #     # Local development - just create tables
+        #     Base.metadata.create_all(bind=engine)
+        #     logger.info("✅ Database tables created/verified (local SQLite)")
+        
+        # Direct table creation (works for both SQLite and Postgres)
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database tables created/verified")
     except Exception as e:
-        logger.error(f"⚠️ Migration failed: {str(e)}")
-        logger.exception("Full migration error:")
+        logger.error(f"⚠️ Table creation failed: {str(e)}")
+        logger.exception("Full error:")
         # Fall back to creating tables directly
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created/verified (fallback)")

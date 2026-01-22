@@ -36,9 +36,9 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(100), unique=True, nullable=False)
     
-    # Profile fields (DM-15)
-    age_group = Column(Enum(AgeGroup), nullable=True)
-    handedness = Column(Enum(Handedness), nullable=True)
+    # Profile fields (DM-15) - Use String for Postgres compatibility
+    age_group = Column(String(20), nullable=True)
+    handedness = Column(String(20), nullable=True)
     height_cm = Column(Integer, nullable=True)  # Height in centimeters
     
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -58,7 +58,8 @@ class Swing(Base):
     video_url = Column(String)  # Future: S3/Supabase Storage URL
     
     # DM-56: Status tracking for upload cleanup
-    status = Column(Enum(SwingStatus), nullable=False, default=SwingStatus.PROCESSING, index=True, server_default='processing')
+    # Use String instead of Enum for Postgres compatibility in direct table creation
+    status = Column(String(20), nullable=False, default='processing', index=True)
     error_message = Column(Text, nullable=True)
     
     # DM-57: User-friendly metadata

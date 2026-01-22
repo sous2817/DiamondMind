@@ -62,13 +62,69 @@ The architecture splits heavy computer vision processing into a dedicated servic
 
 ## Getting Started
 
-**Mobile App:**
+### Prerequisites
+- Docker Desktop (for local Postgres)
+- Python 3.12+ with venv
+- Node.js 18+
+- Expo Go app on your phone
+
+### Local Development Setup
+
+**1. Start Local Database**
+```powershell
+# Start Postgres container
+docker-compose up -d
+
+# Verify it's running
+docker-compose ps
+```
+
+**2. Backend Setup**
+```powershell
+cd backend
+
+# Activate virtual environment
+.\venv\Scripts\Activate.ps1
+
+# Install dependencies (first time only)
+pip install -r requirements.txt
+
+# Copy environment template
+cp .env.example .env
+# Edit .env to use local DATABASE_URL (already configured in .env.example)
+
+# Start backend server
+uvicorn app.main:app --reload --port 8000
+```
+
+Backend will be available at `http://localhost:8000`
+
+**3. Mobile App**
 ```bash
 cd diamondmind-mobile
 npx expo start
 ```
 
-**Note:** Backend services sleep after 15 minutes on free tier. First request may take 30-60 seconds while services wake up.
+Scan QR code with Expo Go app to run on your phone.
+
+### Database Management
+
+**View database:**
+```powershell
+docker exec -it diamondmind-db psql -U diamond_user -d diamondmind
+```
+
+**Reset database:**
+```powershell
+docker-compose down -v  # Remove container and data
+docker-compose up -d    # Start fresh
+```
+
+**Switch to production DB:** Update `DATABASE_URL` in `backend/.env` to your Render Postgres connection string.
+
+See `LOCAL_POSTGRES_SETUP.md` for detailed database setup guide.
+
+**Note:** Deployed backend services sleep after 15 minutes on free tier. First request may take 30-60 seconds while services wake up.
 
 ## Roadmap
 
