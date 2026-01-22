@@ -35,27 +35,31 @@ const BatTrailOverlay = ({
         offsetY = 0;
     }
 
-    // Extract ALL bat positions from frames (show complete trail)
+    // Extract bat positions up to current frame (show trail behind current position)
+    // Only show last 40 frames for cleaner visualization
+    const trailLength = 40;
+    const startIndex = Math.max(0, currentFrameIndex - trailLength);
+    const endIndex = currentFrameIndex + 1; // Include current frame
+
     const batPositions = frames
-        .map(frame => frame.bat_position)
-        .filter(pos => pos !== null && pos !== undefined);
+        .slice(startIndex, endIndex)
+        .map((frame, relativeIndex) => ({
+            pos: frame.bat_position,
+            frameIndex: startIndex + relativeIndex,
+            confidence: frame.bat_position?.confidence // YOLO confidence if available
+        }))
+        .filter(item => item.pos !== null && item.pos !== undefined);
 
     // DEBUG: Log bat detection stats (only once)
     if (currentFrameIndex === 0 && batPositions.length > 0) {
-        console.log(`🏏 Bat Trail: ${batPositions.length}/${frames.length} frames (${((batPositions.length / frames.length) * 100).toFixed(1)}%)`);
+        const totalBatFrames = frames.filter(f => f.bat_position).length;
+        console.log(`🏏 Bat Trail: ${totalBatFrames}/${frames.length} frames (${((totalBatFrames / frames.length) * 100).toFixed(1)}%)`);
     }
 
     if (batPositions.length === 0) {
         // No bat positions detected at all
         return null;
     }
-
-    // Convert normalized coordinates to screen pixels
-    const points = batPositions.map(pos => {
-        const x = offsetX + (pos.x * displayWidth);
-        const y = offsetY + (pos.y * displayHeight);
-        return `${x},${y}`;
-    }).join(' ');
 
     // Get current bat position for highlighting
     const currentBatPos = frames[currentFrameIndex]?.bat_position;
@@ -67,39 +71,43 @@ const BatTrailOverlay = ({
                 width="100%"
                 viewBox={`0 0 ${containerWidth} ${containerHeight}`}
             >
-                {/* Bat trail (polyline) - show if we have at least 2 points */}
-                {batPositions.length >= 2 && (
-                    <Polyline
-                        points={points}
-                        fill="none"
-                        stroke="#FFD700"
-                        strokeWidth="4"
-                        strokeOpacity="0.9"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                )}
+                {/* Bat trail as fading dots - recent = bright, old = transparent */}
+                {batPositions.map((item, index) => {
+                    // Calculate opacity: newest dots are bright (1.0), oldest fade to 0.2
+                    const age = batPositions.length - index - 1; // 0 = newest, length-1 = oldest
+                    const opacity = 1.0 - (age / batPositions.length) * 0.8; // Range: 1.0 → 0.2
 
-                {/* Draw all bat positions as circles for visibility */}
-                {batPositions.map((pos, index) => (
-                    <Circle
-                        key={index}
-                        cx={offsetX + (pos.x * displayWidth)}
-                        cy={offsetY + (pos.y * displayHeight)}
-                        r="6"
-                        fill="#FFD700"
-                        opacity="0.6"
-                    />
-                ))}
+                    // Calculate size: newer dots slightly larger
+                    const size = 8 - (age / batPositions.length) * 3; // Range: 8 → 5
 
-                {/* Current bat position (highlighted - larger and red) */}
+                    // Color based on confidence (if available from YOLO)
+                    // High confidence = yellow, low confidence = orange
+                    const color = item.confidence
+                        ? (item.confidence > 0.5 ? '#FFD700' : '#FFA500')
+                        : '#FFD700';
+
+                    return (
+                        <Circle
+                            key={item.frameIndex}
+                            cx={offsetX + (item.pos.x * displayWidth)}
+                            cy={offsetY + (item.pos.y * displayHeight)}
+                            r={size}
+                            fill={color}
+                            opacity={opacity}
+                        />
+                    );
+                })}
+
+                {/* Current bat position (highlighted - larger and bright red) */}
                 {currentBatPos && (
                     <Circle
                         cx={offsetX + (currentBatPos.x * displayWidth)}
                         cy={offsetY + (currentBatPos.y * displayHeight)}
-                        r="12"
+                        r="10"
                         fill="#FF0000"
                         opacity="1"
+                        stroke="#FFFFFF"
+                        strokeWidth="2"
                     />
                 )}
             </Svg>
