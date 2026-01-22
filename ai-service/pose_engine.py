@@ -68,7 +68,7 @@ class PoseExtractor:
                     sess_options=sess_options,
                     providers=['CPUExecutionProvider']
                 )
-                self.bat_conf_threshold = float(os.environ.get("YOLO_CONF_THRESHOLD", "0.30"))
+                self.bat_conf_threshold = float(os.environ.get("YOLO_CONF_THRESHOLD", "0.25"))
                 print(f"✅ Loaded YOLO v3 ONNX bat detector (confidence >= {self.bat_conf_threshold})")
         except Exception as e:
             print(f"⚠️ Failed to load YOLO model: {e}. Using geometric fallback only.")
