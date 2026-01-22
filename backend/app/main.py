@@ -202,8 +202,8 @@ async def get_profile(current_user: User = Depends(get_current_user)):
         "id": current_user.id,
         "email": current_user.email,
         "username": current_user.username,
-        "age_group": current_user.age_group.value if current_user.age_group else None,
-        "handedness": current_user.handedness.value if current_user.handedness else None,
+        "age_group": current_user.age_group,
+        "handedness": current_user.handedness,
         "height_cm": current_user.height_cm,
         "created_at": str(current_user.created_at),
         "updated_at": str(current_user.updated_at)
@@ -222,14 +222,18 @@ async def update_profile(
     
     if age_group is not None:
         try:
-            current_user.age_group = AgeGroup(age_group)
+            # Validate enum value but store as string
+            valid_age = AgeGroup(age_group)
+            current_user.age_group = valid_age.value
             updated = True
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid age_group: {age_group}")
     
     if handedness is not None:
         try:
-            current_user.handedness = Handedness(handedness)
+            # Validate enum value but store as string
+            valid_hand = Handedness(handedness)
+            current_user.handedness = valid_hand.value
             updated = True
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid handedness: {handedness}")
@@ -249,8 +253,8 @@ async def update_profile(
         "id": current_user.id,
         "email": current_user.email,
         "username": current_user.username,
-        "age_group": current_user.age_group.value if current_user.age_group else None,
-        "handedness": current_user.handedness.value if current_user.handedness else None,
+        "age_group": current_user.age_group,
+        "handedness": current_user.handedness,
         "height_cm": current_user.height_cm,
         "updated": updated
     }
@@ -269,43 +273,37 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
 @app.get("/api/swings")
 async def get_my_swings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all completed swings for the authenticated user"""
-    try:
-        # Try to filter by status (if column exists)
-        swings = db.query(Swing).filter(
-            Swing.user_id == current_user.id,
-            Swing.status == SwingStatus.COMPLETED
-        ).all()
-    except Exception as e:
-        # Fallback if status column doesn't exist yet (migration pending)
-        logger.warning(f"Status filter failed, returning all swings: {str(e)}")
-        swings = db.query(Swing).filter(Swing.user_id == current_user.id).all()
+    # TEMPORARY: Remove status filter to work with both ENUM and VARCHAR columns
+    # TODO: Re-add after production DB ENUM types are dropped
+    swings = db.query(Swing).filter(Swing.user_id == current_user.id).all()
     
-    return [
-        {
-            "id": swing.id,
-            "filename": swing.filename,
-            "title": getattr(swing, 'title', None),  # DM-57: Custom title
-            "notes": getattr(swing, 'notes', None),  # DM-57: User notes
-            "video_url": swing.video_url,
-            "status": swing.status.value if hasattr(swing, 'status') and swing.status else 'completed',  # DM-56: Status tracking
-            "created_at": str(swing.created_at),
-            "has_analysis": swing.analysis is not None
-        }
-        for swing in swings
-    ]
+    serialized_swings = []
+    for swing in swings:
+        try:
+            serialized_swings.append({
+                "id": swing.id,
+                "filename": swing.filename,
+                "title": getattr(swing, 'title', None),
+                "notes": getattr(swing, 'notes', None),
+                "video_url": swing.video_url,
+                "status": swing.status if hasattr(swing, 'status') and swing.status else 'completed',
+                "created_at": str(swing.created_at),
+                "has_analysis": swing.analysis is not None
+            })
+        except Exception as e:
+            import traceback
+            logger.error(f"❌ Error serializing swing {swing.id}: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Skip this swing but don't crash the whole request
+            continue
+            
+    return serialized_swings
 
-# Legacy endpoint for backward compatibility
 @app.get("/api/users/{user_id}/swings")
 async def get_user_swings_legacy(user_id: int, db: Session = Depends(get_db)):
     """Get all completed swings for a user (legacy endpoint - use GET /api/swings instead)"""
-    try:
-        swings = db.query(Swing).filter(
-            Swing.user_id == user_id,
-            Swing.status == SwingStatus.COMPLETED
-        ).all()
-    except Exception as e:
-        logger.warning(f"Status filter failed, returning all swings: {str(e)}")
-        swings = db.query(Swing).filter(Swing.user_id == user_id).all()
+    # TEMPORARY: Remove status filter to work with both ENUM and VARCHAR columns
+    swings = db.query(Swing).filter(Swing.user_id == user_id).all()
     
     return [
         {
@@ -314,7 +312,7 @@ async def get_user_swings_legacy(user_id: int, db: Session = Depends(get_db)):
             "title": getattr(swing, 'title', None),
             "notes": getattr(swing, 'notes', None),
             "video_url": swing.video_url,
-            "status": swing.status.value if hasattr(swing, 'status') and swing.status else 'completed',
+            "status": swing.status if hasattr(swing, 'status') and swing.status else 'completed',
             "created_at": str(swing.created_at),
             "has_analysis": swing.analysis is not None
         }
@@ -457,7 +455,7 @@ async def process_video_background(file_data: bytes, filename: str, content_type
                          user_id=user_id,
                          filename=filename,
                          video_url=result.get("download_url"),
-                         status=SwingStatus.PROCESSING
+                         status=SwingStatus.PROCESSING.value
                      )
                      db.add(swing)
                      db.commit()
@@ -477,7 +475,7 @@ async def process_video_background(file_data: bytes, filename: str, content_type
                      db.commit()
                      
                      # Update swing status to 'completed'
-                     swing.status = SwingStatus.COMPLETED
+                     swing.status = SwingStatus.COMPLETED.value
                      db.commit()
                      db.refresh(analysis)
                      print(f"Background: 💾 Saved analysis to database (ID: {analysis.id})")
@@ -493,7 +491,7 @@ async def process_video_background(file_data: bytes, filename: str, content_type
                      # Mark swing as failed if it was created
                      try:
                          if 'swing' in locals() and swing.id:
-                             swing.status = SwingStatus.FAILED
+                             swing.status = SwingStatus.FAILED.value
                              swing.error_message = f"Database error: {str(db_error)[:500]}"
                              db.commit()
                              print(f"Background: ❌ Swing {swing.id} marked as failed")

@@ -16,6 +16,11 @@ Thumbs.db
 **/.env.local
 **/.env.*.local
 
+# --- DATABASE FILES ---
+*.db
+*.sqlite
+*.sqlite3
+
 # --- LOGS & UPLOADS ---
 *.log
 **/uploads/
