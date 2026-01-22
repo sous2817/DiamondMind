@@ -88,9 +88,10 @@ class PoseExtractor:
             print(f"⚠️ Progress report failed: {e}")
             pass
 
-    def _detect_bat_yolo(self, frame):
+    def _detect_bat_yolo(self, frame, hand_landmarks=None):
         """
         Detects bat using YOLOv8 v3 ONNX model (DM-66 - Memory optimized).
+        Tracks barrel end instead of center for better swing analysis.
         Returns normalized (x, y) coordinates + confidence or None.
         """
         # Check if YOLO model is available
@@ -132,16 +133,70 @@ class PoseExtractor:
             if confidences[best_idx] < self.bat_conf_threshold:
                 return None
             
-            # Extract center coordinates (normalized to 640x640)
+            # Extract bounding box (normalized to 640x640)
             cx_norm = predictions[0, best_idx]  # center x (0-640)
             cy_norm = predictions[1, best_idx]  # center y (0-640)
+            w_norm = predictions[2, best_idx]   # width
+            h_norm = predictions[3, best_idx]   # height
+            
+            # Calculate bounding box corners
+            x1_norm = cx_norm - w_norm / 2
+            y1_norm = cy_norm - h_norm / 2
+            x2_norm = cx_norm + w_norm / 2
+            y2_norm = cy_norm + h_norm / 2
             
             # Convert to original frame coordinates
+            x1 = x1_norm * w / 640
+            y1 = y1_norm * h / 640
+            x2 = x2_norm * w / 640
+            y2 = y2_norm * h / 640
             cx = cx_norm * w / 640
             cy = cy_norm * h / 640
             
+            # Determine barrel position using hand landmarks
+            bat_x, bat_y = cx, cy  # Default to center if hands not detected
+            
+            if hand_landmarks and hasattr(hand_landmarks, 'landmark'):
+                try:
+                    # Get average hand position (wrists)
+                    left_wrist = hand_landmarks.landmark[15]  # Left wrist
+                    right_wrist = hand_landmarks.landmark[16]  # Right wrist
+                    hand_x = ((left_wrist.x + right_wrist.x) / 2) * w
+                    hand_y = ((left_wrist.y + right_wrist.y) / 2) * h
+                    
+                    # Calculate distances from hands to each corner of the box
+                    # The handle is the end closest to hands, barrel is the opposite
+                    corners = [
+                        (x1, y1),  # Top-left
+                        (x2, y1),  # Top-right
+                        (x1, y2),  # Bottom-left
+                        (x2, y2),  # Bottom-right
+                    ]
+                    
+                    distances = [
+                        ((corner[0] - hand_x)**2 + (corner[1] - hand_y)**2)**0.5
+                        for corner in corners
+                    ]
+                    
+                    # Find closest corner (handle end)
+                    handle_idx = distances.index(min(distances))
+                    handle_corner = corners[handle_idx]
+                    
+                    # Barrel is the opposite corner
+                    # 0->3, 1->2, 2->1, 3->0
+                    barrel_idx = 3 - handle_idx
+                    barrel_corner = corners[barrel_idx]
+                    
+                    # Track the barrel corner
+                    bat_x, bat_y = barrel_corner
+                    
+                except Exception as e:
+                    # If hand tracking fails, fall back to center
+                    print(f"⚠️ Hand landmark processing failed: {e}, using bbox center")
+                    bat_x, bat_y = cx, cy
+            
             # Apply temporal smoothing
-            smoothed_x, smoothed_y = self._smooth_bat_position(int(cx), int(cy))
+            smoothed_x, smoothed_y = self._smooth_bat_position(int(bat_x), int(bat_y))
             
             # Return normalized coordinates with confidence
             return {
@@ -232,12 +287,13 @@ class PoseExtractor:
         
         Strategy:
         1. Try YOLO first (ML-based, production quality)
+           - Uses hand landmarks to track barrel end if available
         2. Fallback to geometric if YOLO fails (hand-based estimation)
         
         Returns normalized (x, y) coordinates with optional confidence.
         """
-        # Try YOLO first
-        yolo_result = self._detect_bat_yolo(frame)
+        # Try YOLO first (pass hand landmarks for barrel tracking)
+        yolo_result = self._detect_bat_yolo(frame, hand_landmarks)
         if yolo_result is not None:
             return yolo_result
         
